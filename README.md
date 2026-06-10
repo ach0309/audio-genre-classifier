@@ -9,5 +9,5 @@ git clone git@github.com:ach0309/audio-genre-classifier.git
 
 **Make sure you’re inside your local copy of the repository, then create your own branch (you can rename it later)**
 ```bash
-git checkout -b <first-name>-eda
+git checkout -b <first-name>-<what-youre-working-on> (ex: aeon-eda or noah-spectogram or mike-bivariate)
 ```

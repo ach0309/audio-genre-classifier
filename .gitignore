@@ -1,1 +1,5 @@
 /data/
+/reports/
+/.matplotlib-cache/
+/.numba-cache/
+__pycache__/

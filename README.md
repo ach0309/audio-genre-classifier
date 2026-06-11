@@ -20,39 +20,11 @@ Install the project dependencies:
 python -m pip install -r requirements.txt
 ```
 
-Download and stage the GTZAN audio files under the ignored `data/` folder:
+Place the GTZAN genre folders under the ignored `data/` folder:
 
-```bash
-python code/setup_gtzan_dataset.py
+```text
+data/genres_original/
 ```
-
-If you already downloaded GTZAN, point the setup script at the local folder:
-
-```bash
-python code/setup_gtzan_dataset.py --source /path/to/gtzan
-```
-
-Run the first EDA pass:
-
-```bash
-python code/genre_distribution_eda.py
-```
-
-The default EDA run validates the expected genre folders and saves a class
-distribution chart to `reports/genre_distribution.png`. To load audio files
-with `librosa` for duration and sample-rate checks, run:
-
-```bash
-python code/genre_distribution_eda.py --audio-summary
-```
-
-Plot one MFCC example per genre:
-
-```bash
-python code/mfcc_examples_eda.py
-```
-
-The MFCC chart is saved to `reports/mfcc_examples_by_genre.png`.
 
 For an interactive notebook view of the genre distribution, audio metadata
 sample, and MFCC examples, open `code/1_explore.ipynb`.

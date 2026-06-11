@@ -53,3 +53,6 @@ python code/mfcc_examples_eda.py
 ```
 
 The MFCC chart is saved to `reports/mfcc_examples_by_genre.png`.
+
+For an interactive notebook view of the genre distribution, audio metadata
+sample, and MFCC examples, open `code/1_explore.ipynb`.

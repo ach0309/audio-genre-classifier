@@ -17,7 +17,7 @@ git checkout -b <first-name>-<what-youre-working-on> (ex: aeon-eda or noah-spect
 Install the project dependencies:
 
 ```bash
-python -m pip install -r requirements.txt
+python -m pip install -r docs/requirements.txt
 ```
 
 Place the GTZAN genre folders under the ignored `data/` folder:

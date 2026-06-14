@@ -37,16 +37,25 @@ git checkout -b <first-name>-<what-youre-working-on>
 python -m pip install -r docs/requirements.txt
 ```
 
-**Download the GTZAN dataset** and place the genre folders at:
-```
-data/genres_original/
-├── blues/
-├── classical/
-├── country/
-...
-```
+## Dataset
 
-The `data/` directory is gitignored. The CSV files (`features_30_sec.csv`, `features_3_sec.csv`) are already committed and do not require the raw audio to use.
+GTZAN is a benchmark dataset for music genre classification collected by George Tzanetakis (2002).
+
+| Property | Value |
+|---|---|
+| Genres | 10 (blues, classical, country, disco, hiphop, jazz, metal, pop, reggae, rock) |
+| Songs per genre | 100 |
+| Total songs | 1,000 |
+| Clip length | ~30 seconds |
+| Sample rate | 22,050 Hz |
+| Format | `.wav` (mono) |
+| Known issues | `jazz.00054.wav` is corrupt and excluded from training |
+
+The dataset is downloadable from this [Kaggle link](https://www.kaggle.com/datasets/andradaolteanu/gtzan-dataset-music-genre-classification/code) and is available in three forms in this project:
+
+- **Raw audio** — 1,000 `.wav` files in `data/genres_original/`. Not committed to the repo; download from Kaggle and place manually (see Setup above).
+- **CSV features** — Pre-extracted features committed to the repo. `features_30_sec.csv` has one row per song; `features_3_sec.csv` splits each song into 10 three-second clips (9,990 rows total). No raw audio needed to use these.
+- **Images** — EDA plots (waveforms, spectrograms, MFCCs, class distribution) saved to `docs/images/` and committed to the repo.
 
 ## Notebooks
 

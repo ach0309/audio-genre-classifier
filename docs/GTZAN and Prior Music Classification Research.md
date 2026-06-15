@@ -1,0 +1,21 @@
+## OVERVIEW ON GTZAN DATASET
+#### One of the most widely used benchmark datasets for music genre classification is GTZAN. George Tzanetakis and Perry Cook  utilized their early work to introduce GTZAN which in essence automatically classified audio into genre categories. 
+
+#### As a popular music dataset for music genre classification, GTZAN contains 1000 audio tracks, audio sampling rate of 22,050 Hz, mono, 16-bit, with each track being about 30 seconds long, and also divided into 10 genres with 100 songs per genre. Mainly, these 10 genres are rock, reggae, pop, metal, jazz, blues, clasical, country, disco, and hiphop. Usually, each audio is provided as a .wav file and many people utilize it in training machine learning models to predict song genres based on features like pitch, tempo, rhythm, spectral features, MFCCs(Mel-Frequency Cepstral Coefficients) and much more. In essence, MFCCs are numerical features extracted from audio to help machine learning model understand the sound.
+
+#### Due to it being small, accessible, balanced across classes, and easy to use for machine learning experiments, GTZAN became popular. For the purpose of this project, GTZAN is usefull because we can quickly test feature extraction, perform model classification, and evaluate metrics without the need of huge audio dataset. Feature types such as Cepstral, Harmonic/rhythm, Image-like, Spectral, and Time-domain features gives much flexibility allows for a well balances project workflow use. 
+
+## Prior work
+#### Prior to GTZAN, handcrafted audio features and traditional classifiers were the main focus. By extracting statistical pattern-recognition methods with rhythmic, timbral, and pitch-related features, the foundation for later work was laid through the use of spectral features, MFCCs, and models such as KNN, Random Forest, SVM, Log Regression, and neural networks. 
+
+## Limitations to GTZAN dataset
+#### In spite of its popular usage, GTZAN has known downfalls. A researcher by the name of Bob L. Sturm analyzed the dataset and found weaknesses including mislabels, repetitions, and distortions. Model evaluation can be affected by these shortcomings because a classifier may perform well for reasons that may not truly reflect true genre understanding. For instance, if we see duplicate or similar tracks in both the training and testing sets, the model may falsely appear accurate than it really is. Moreso, issues revolving around artist repetition causes concerns as a model may learn artist-specific patterns rather than genre-level paterns if many songs from the same artist appear in the dataset. This is significant because the goal here is not to just recognize familiar artists but to identify broader musical characteristics that generalize to new songs. In lieu of such shortcomings, GTZAN should be used as a baseline dataset with caution. It is in fact useful for learning, experiments, and comparison of different modeling approaches, however, a high accuracy on GTZAN does not automatically prove that a model will perform well on real world music. 
+
+## Conclusion
+#### In summary, GTZAN has made immense contribution to music genre classification research. Having a balanced genre distribution, simple structure, and accesible audio format, GTZAN has become vital in machine learning experiments. Although both deep learning and traditional feature-based models can be applied to this dataset, there are some limitations to GTZAN. Such includes duplicate tracks, artist repitition, potential mislabeling, and audio distortion. As such, caution is warranted when interpreting results from this dataset. To strengthen a music genre classification project, we should not just make report on accuracy but also point out the limitations in our datasetm model selection, feature extraction, and the probabilities of overfitting. 
+
+
+## References
+##### 1. TensorFlow Datasets — GTZAN Catalog https://www.tensorflow.org/datasets/catalog/gtzan
+##### Tzanetakis & Cook — “Musical Genre Classification of Audio Signals" https://www.cs.cmu.edu/~gtzan/work/pubs/tsap02gtzan.pdf
+##### 3.Bob L. Sturm — “The GTZAN dataset: Its contents, its faults, their effects on evaluation, and its future use”https://arxiv.org/abs/1306.1461

@@ -2,3 +2,4 @@ pandas
 matplotlib
 librosa
 kagglehub
+torch

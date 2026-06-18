@@ -32,7 +32,7 @@ PostgreSQL table  →   same data, but locked behind a server that enforces rule
 ```
 
 - **`postgres` server** — a background process that actually stores and retrieves data. You start it once; it keeps running.
-- **`psql`** — a terminal program that lets you type SQL and see results. Think of it as the "REPL" for Postgres.
+- **`psql`** — a terminal program that connects to the Postgres server and lets you type SQL commands and see results immediately. Think of it like the Python interactive shell, but for your database.
 - **`psycopg2`** — a Python library that lets your scripts send SQL to the server the same way `psql` does.
 
 ---

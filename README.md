@@ -12,7 +12,7 @@ audio-genre-classifier/
 │   ├── 3_model.ipynb       # Model training & evaluation 
 │   └── 4_predict.ipynb     
 ├── data/
-│   ├── genres_original/    # Raw .wav files (not committed — see setup below)
+│   ├── genres_original/    # Raw .wav files (not committed, see setup below)
 │   ├── features_30_sec.csv # Pre-extracted features, 1 row per song
 │   └── features_3_sec.csv  # Pre-extracted features, 10 x 3-second clips per song
 ├── db/
@@ -94,30 +94,30 @@ GTZAN is a benchmark dataset for music genre classification collected by George 
 
 The dataset is downloadable from this [Kaggle link](https://www.kaggle.com/datasets/andradaolteanu/gtzan-dataset-music-genre-classification/code) and is available in three forms in this project:
 
-- **Raw audio** — 1,000 `.wav` files in `data/genres_original/`. Not committed to the repo; download from Kaggle and place manually (see Setup above).
-- **CSV features** — Pre-extracted features committed to the repo. `features_30_sec.csv` has one row per song; `features_3_sec.csv` splits each song into 10 three-second clips (9,990 rows total). No raw audio needed to use these.
-- **Images** — EDA plots (waveforms, spectrograms, MFCCs, class distribution) saved to `docs/images/` and committed to the repo.
+- **Raw audio**: 1,000 `.wav` files in `data/genres_original/`. Not committed to the repo; download from Kaggle and place manually (see Setup above).
+- **CSV features**: Pre-extracted features committed to the repo. `features_30_sec.csv` has one row per song; `features_3_sec.csv` splits each song into 10 three-second clips (9,990 rows total). No raw audio needed to use these.
+- **Images**: EDA plots (waveforms, spectrograms, MFCCs, class distribution) saved to `docs/images/` and committed to the repo.
 
 ## Notebooks
 
-### `1_explore.ipynb` — EDA (complete)
+### `1_explore.ipynb`: EDA (complete)
 
 Covers the full GTZAN dataset from multiple angles:
 
-- **Class distribution** — 100 songs per genre, perfectly balanced
-- **Waveforms** — amplitude over time for one clip per genre
-- **Mel spectrograms** — frequency × time visualizations
-- **MFCCs** — compressed spectral features (mean/variance per clip)
-- **Audio duration** — 35 distinct clip lengths; majority at 30.013 s
-- **Sample rate** — all 999 loadable files are 22,050 Hz
-- **Integrity check** — `jazz.00054.wav` is corrupt and must be excluded
+- **Class distribution**: 100 songs per genre, perfectly balanced
+- **Waveforms**: amplitude over time for one clip per genre
+- **Mel spectrograms**: frequency × time visualizations
+- **MFCCs**: compressed spectral features (mean/variance per clip)
+- **Audio duration**: 35 distinct clip lengths; majority at 30.013 s
+- **Sample rate**: all 999 loadable files are 22,050 Hz
+- **Integrity check**: `jazz.00054.wav` is corrupt and must be excluded
 
 Key findings relevant to preprocessing:
-- `features_3_sec.csv` has **9,990 rows** (not 10,000) — 10 short songs produced 9 clips instead of 10
+- `features_3_sec.csv` has **9,990 rows** (not 10,000): 10 short songs produced 9 clips instead of 10
 - Splits must be done at the **parent-song level** to avoid data leakage
 - Drop `jazz.00054` before splitting
 
-### `2_transform.ipynb` — Preprocessing (in progress)
+### `2_transform.ipynb`: Preprocessing (in progress)
 
 Planned:
 - Drop metadata columns (`filename`, `length`)
@@ -125,6 +125,6 @@ Planned:
 - Parent-song-level train/val/test split
 - `StandardScaler` fit on train set, applied to val and test
 
-### `3_model.ipynb` — Model training (not started)
+### `3_model.ipynb`: Model training (not started)
 
-### `4_predict.ipynb` — Inference (not started)
+### `4_predict.ipynb`: Inference (not started)

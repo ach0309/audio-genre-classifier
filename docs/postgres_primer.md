@@ -1,35 +1,35 @@
-# PostgreSQL Setup — How the Database Works in This Project
+# PostgreSQL Setup
 
-This document explains why this project uses PostgreSQL, how it fits into the pipeline, and how to reproduce the setup locally.
+New to Postgres? Read this before running the setup steps in the README.
 
 ---
 
 ## What the database is for
 
-The model trains on raw `.wav` files from `data/genres_original/`. Before training, those 999 songs need to be divided into three folds: train, val, and test. The `audio_clips` table is the single source of truth for those assignments — every contributor queries the same table instead of computing splits independently and risking inconsistency.
+The model trains on raw `.wav` files from `data/genres_original/`. Those 999 songs need to be divided into train, val, and test before training. Split assignments are stored in the `audio_clips` table so everyone on the team gets the same splits by running the same script, rather than computing them independently and getting different results.
 
-The CSVs (`features_30_sec.csv`, `features_3_sec.csv`) are used only for EDA in `1_explore.ipynb`. They are not part of the training pipeline.
+The CSVs (`features_30_sec.csv`, `features_3_sec.csv`) are used only for EDA in `1_explore.ipynb` and are not part of the training pipeline.
 
 ---
 
-## How PostgreSQL works locally
+## How Postgres works locally
 
-PostgreSQL runs as a background server process on each contributor's machine. Two separate programs talk to it:
+Postgres runs as a background server on your machine. Two separate programs connect to it:
 
 ```
 ┌─────────────────────────────────┐
-│  Local machine                  │
+│  Your machine                   │
 │                                 │
-│  postgres server (background)   │  ← stores and retrieves data
+│  postgres server (background)   │  ← stores the data
 │       ↕  (TCP port 5432)        │
-│  psql (terminal client)         │  ← interactive SQL from the terminal
-│  Python script (psycopg2)       │  ← notebook and scripts connect here
+│  psql (terminal client)         │  ← run SQL from the terminal
+│  Python script (psycopg2)       │  ← notebooks and scripts connect here
 └─────────────────────────────────┘
 ```
 
-- **`postgres` server** — the database engine. Runs in the background; owns the data files.
-- **`psql`** — a terminal program that connects to the server and lets contributors run SQL interactively. Similar to Python's interactive shell, but for the database.
-- **`psycopg2`** — a Python library that lets scripts connect to Postgres and get results back as Python objects:
+- **`postgres` server**: the database engine running in the background. Start it once and it keeps running.
+- **`psql`**: a terminal program that connects to the server so you can run SQL interactively. Think of it like the Python interactive shell, but for your database.
+- **`psycopg2`**: a Python library that lets scripts talk to Postgres and get results back as Python objects:
 
 ```
 Python script
@@ -43,57 +43,58 @@ results returned as Python objects (lists, dicts, etc.)
 
 ---
 
-## Schema
+## The table
 
 One table, three columns:
 
 ```sql
 CREATE TABLE audio_clips (
     id        SERIAL PRIMARY KEY,
-    file_path TEXT NOT NULL UNIQUE,  -- relative path to wav file, e.g. data/genres_original/blues/blues.00000.wav
-    label     TEXT NOT NULL,         -- genre: blues, classical, country, disco, hiphop, jazz, metal, pop, reggae, rock
+    file_path TEXT NOT NULL UNIQUE,  -- e.g. data/genres_original/blues/blues.00000.wav
+    label     TEXT NOT NULL,         -- genre name
     split     TEXT NOT NULL CHECK (split IN ('train', 'val', 'test'))
 );
 ```
 
-One row per 30-second wav file. `jazz.00054.wav` is excluded — it is a corrupt file that fails to load.
+One row per 30-second wav file. `jazz.00054.wav` is left out because it is corrupt and fails to load.
 
 ---
 
-## Split assignment
+## How splits are assigned
 
-`db/populate.py` scans `data/genres_original/`, excludes `jazz.00054.wav`, shuffles the remaining 999 songs with a fixed seed (`random.seed(42)`), and assigns:
+`db/populate.py` scans `data/genres_original/`, skips `jazz.00054.wav`, shuffles the remaining 999 songs with `random.seed(42)`, and splits them:
 
-- **70%** → train (699 songs)
-- **15%** → val  (149 songs)
-- **15%** → test (151 songs)
+- train: 699 songs (70%)
+- val: 149 songs (15%)
+- test: 151 songs (15%)
 
-The fixed seed guarantees that every contributor who runs `populate.py` gets identical splits.
+The fixed seed means anyone who runs `populate.py` gets the same splits.
 
 ---
 
-## Reproducing the setup
+## Setup steps
 
-**Prerequisites:** PostgreSQL 14+ installed and running locally.
+PostgreSQL 14+ needs to be installed and running locally first.
 
 ```bash
-# 1. Create the database
+# create the database
 createdb audio_genre_classifier
 
-# 2. Create the table
+# create the table
 psql audio_genre_classifier < db/schema.sql
 
-# 3. Copy the env template and fill in local credentials
+# copy the env template and fill in your local credentials
 cp .env.example .env
 
-# 4. Populate split assignments (requires data/genres_original/)
+# populate the table (requires data/genres_original/)
 python db/populate.py
 
-# 5. Verify
+# verify
 psql audio_genre_classifier < db/queries.sql
 ```
 
-Expected output from step 5:
+Expected output from the last step:
+
 ```
  split | songs
 -------+-------
@@ -106,7 +107,7 @@ Expected output from step 5:
 
 ## How to inspect the data
 
-The table lives in Postgres's internal binary storage (typically `/opt/homebrew/var/postgresql@14/` on Mac) — it cannot be opened as a file. Use `psql` to inspect it:
+The table lives in Postgres's internal binary storage (around `/opt/homebrew/var/postgresql@14/` on Mac). There is no file you can open directly. Use `psql` to look at it:
 
 ```bash
 psql audio_genre_classifier
@@ -126,16 +127,15 @@ psql audio_genre_classifier -c "SELECT * FROM audio_clips LIMIT 10;"
 
 ---
 
-## Each contributor runs their own local database
+## Teammates
 
-The database is not shared — each contributor runs the same scripts locally. Because the seed is fixed, the splits are identical across all machines.
+The database is local to each person's machine. Everyone runs the same `schema.sql` and `populate.py` from the repo and ends up with the same table.
 
 ```
-Contributor A                 Contributor B
-┌──────────────┐              ┌──────────────┐
-│  postgres    │              │  postgres    │
-│  audio_genre │  identical   │  audio_genre │
-│  (local)     │   splits     │  (local)     │
-└──────────────┘              └──────────────┘
-        ↑ both run the same schema.sql + populate.py from the repo
+Your machine              Teammate's machine
+┌──────────────┐          ┌──────────────┐
+│  postgres    │          │  postgres    │
+│  audio_genre │  same    │  audio_genre │
+│  (local)     │  splits  │  (local)     │
+└──────────────┘          └──────────────┘
 ```

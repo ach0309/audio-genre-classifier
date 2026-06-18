@@ -3,3 +3,5 @@ matplotlib
 librosa
 kagglehub
 psycopg2-binary
+python-dotenv
+torch

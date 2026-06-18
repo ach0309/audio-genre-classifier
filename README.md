@@ -59,10 +59,10 @@ createdb audio_genre_classifier
 # 2. Create the table
 psql audio_genre_classifier < db/schema.sql
 
-# 3. Set your connection string
-export DATABASE_URL="postgresql://localhost/audio_genre_classifier"
+# 3. Copy .env.example and fill in your details
+cp .env.example .env
 
-# 4. Populate splits (requires data/features_3_sec.csv)
+# 4. Populate splits (requires data/genres_original/)
 python db/populate.py
 
 # 5. Verify
@@ -71,11 +71,11 @@ psql audio_genre_classifier < db/queries.sql
 
 Expected output from step 5:
 ```
- split | clips
+ split | songs
 -------+-------
- test  |  1495
- train |  6986
- val   |  1499
+ test  |   151
+ train |   699
+ val   |   149
 ```
 
 ## Dataset

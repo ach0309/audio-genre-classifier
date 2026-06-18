@@ -57,9 +57,9 @@ PostgreSQL table  →   same data, but locked behind a server that enforces rule
    └─ runs our CREATE TABLE statement — creates the audio_clips table
 
 3. python db/populate.py
-   └─ reads data/features_3_sec.csv
-      assigns train/val/test to each song (at the parent-song level)
-      INSERTs 9,980 rows into audio_clips
+   └─ scans data/genres_original/ for wav files
+      assigns train/val/test to each song
+      INSERTs 999 rows into audio_clips (jazz.00054 excluded)
 
 4. psql ... < db/queries.sql
    └─ SELECTs rows back out, filtered by split
@@ -83,35 +83,25 @@ For a class project a CSV would work fine. Using Postgres here gives you:
 ```sql
 CREATE TABLE audio_clips (
     id        SERIAL PRIMARY KEY,   -- auto-incrementing row ID
-    file_path TEXT NOT NULL UNIQUE, -- clip filename, e.g. blues.00000.0
+    file_path TEXT NOT NULL UNIQUE, -- path to wav file, e.g. data/genres_original/blues/blues.00000.wav
     label     TEXT NOT NULL,        -- genre: blues, jazz, rock, ...
     split     TEXT NOT NULL CHECK (split IN ('train', 'val', 'test'))
 );
 ```
 
-One row per 3-second clip. `jazz.00054` and all its clips are excluded before insertion.
+One row per 30-second wav file. `jazz.00054.wav` is excluded before insertion (corrupt file).
 
 ---
 
 ## Split assignment logic
 
-Splits are assigned at the **parent-song level**, not the clip level.
+`populate.py` shuffles all 999 wav files with a fixed random seed (`random.seed(42)`) and assigns:
 
-Why it matters: `blues.00000.0` through `blues.00000.9` are all 3-second windows cut from the same 30-second recording. If clip `.0` goes to train and clip `.5` goes to test, the model is essentially memorizing the same song — that's **data leakage**. Assigning all clips from a song to the same fold prevents this.
+- **70%** → train (699 songs)
+- **15%** → val  (149 songs)
+- **15%** → test (151 songs)
 
-```
-blues.00000  →  assigned 'train'
-  blues.00000.0  →  train
-  blues.00000.1  →  train
-  ...
-  blues.00000.9  →  train
-
-blues.00001  →  assigned 'val'
-  blues.00001.0  →  val
-  ...
-```
-
-Ratio: **70% train / 15% val / 15% test** across 999 parent songs (1,000 minus `jazz.00054`).
+The fixed seed means every teammate who runs `populate.py` gets the exact same splits.
 
 ---
 
@@ -123,7 +113,7 @@ The database is **local to each person's machine** — teammates can't connect t
 2. Run `db/schema.sql` to create the table
 3. Run `db/populate.py` to populate it
 
-Because `populate.py` uses a **fixed random seed** (`random_state=42`), everyone generates the exact same splits from the same CSV. The DB isn't shared state — it's a reproducible artifact that any teammate can recreate in minutes.
+Because `populate.py` uses a **fixed random seed** (`random.seed(42)`), everyone generates the exact same splits from the same audio files. The DB isn't shared state — it's a reproducible artifact that any teammate can recreate in minutes.
 
 ```
 Your Mac                  Teammate's Mac

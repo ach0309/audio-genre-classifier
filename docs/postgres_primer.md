@@ -115,6 +115,28 @@ The fixed seed means every teammate who runs `populate.py` gets the exact same s
 
 ---
 
+## How to see the actual data
+
+The table lives inside Postgres's internal storage on your disk (around `/opt/homebrew/var/postgresql@14/` on Mac) in a binary format only Postgres can read — there's no CSV or file you can open directly. Use `psql` to look inside:
+
+```bash
+# open an interactive session
+psql audio_genre_classifier
+
+# inside the session:
+\d audio_clips              -- see the table structure
+SELECT * FROM audio_clips LIMIT 10;  -- see actual rows
+\q                          -- exit
+```
+
+Or as a one-liner without entering the session:
+
+```bash
+psql audio_genre_classifier -c "SELECT * FROM audio_clips LIMIT 10;"
+```
+
+---
+
 ## How teammates access the database
 
 The database is **local to each person's machine** — teammates can't connect to yours directly. Instead, everyone runs the same setup:

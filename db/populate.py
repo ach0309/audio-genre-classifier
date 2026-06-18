@@ -1,85 +1,103 @@
 """
-Reads data/features_3_sec.csv, assigns 70/15/15 train/val/test splits at the
-parent-song level, and populates the audio_clips table.
+Scans data/genres_original/ for wav files, assigns 70/15/15 train/val/test
+splits at the song level, and populates the audio_clips table.
 
-Requires:
-    DATABASE_URL env var, e.g.:
-    export DATABASE_URL="postgresql://localhost/audio_genre_classifier"
+file_path is stored relative to the repo root (e.g. data/genres_original/blues/blues.00000.wav)
+so it works on any teammate's machine regardless of where the repo is cloned.
+
+Requires a .env file in the project root (see .env.example).
 
 Usage:
     python db/populate.py
 """
 
 import os
-import pandas as pd
+import random
+from pathlib import Path
+
 import psycopg2
 from psycopg2.extras import execute_values
+from dotenv import load_dotenv
 
-CSV_PATH = os.path.join(os.path.dirname(__file__), '..', 'data', 'features_3_sec.csv')
-CORRUPT_SONG = 'jazz.00054'
+ROOT = Path(__file__).parent.parent
+load_dotenv(ROOT / '.env')
+
+AUDIO_DIR = ROOT / 'data' / 'genres_original'
+CORRUPT_FILE = 'jazz.00054.wav'
 RANDOM_SEED = 42
 TRAIN_FRAC = 0.70
 VAL_FRAC = 0.15
 
 
-def assign_splits(df: pd.DataFrame) -> pd.DataFrame:
-    df = df.copy()
+def get_connection():
+    return psycopg2.connect(
+        host=os.environ['POSTGRES_HOST'],
+        port=os.environ['POSTGRES_PORT'],
+        dbname=os.environ['POSTGRES_DB'],
+        user=os.environ['POSTGRES_USER'],
+        password=os.environ.get('POSTGRES_PASSWORD', ''),
+    )
 
-    # e.g. "blues.00000.3.wav" → strip .wav → "blues.00000.3" → "blues.00000"
-    df['parent'] = df['filename'].str.replace(r'\.wav$', '', regex=True).str.rsplit('.', n=1).str[0]
 
-    # Drop all clips from the corrupt recording
-    df = df[df['parent'] != CORRUPT_SONG].reset_index(drop=True)
+def collect_songs() -> list[tuple[str, str]]:
+    """Return (relative_path, label) for every non-corrupt wav in genres_original/."""
+    songs = []
+    for wav_path in sorted(AUDIO_DIR.glob('*/*.wav')):
+        if wav_path.name == CORRUPT_FILE:
+            continue
+        label = wav_path.parent.name
+        rel_path = str(wav_path.relative_to(ROOT))
+        songs.append((rel_path, label))
+    return songs
 
-    # Shuffle unique parent songs with a fixed seed for reproducibility
-    parents = sorted(df['parent'].unique())
-    shuffled = pd.Series(parents).sample(frac=1, random_state=RANDOM_SEED).tolist()
+
+def assign_splits(songs: list[tuple[str, str]]) -> list[tuple[str, str, str]]:
+    """Shuffle songs with a fixed seed and assign 70/15/15 train/val/test."""
+    shuffled = songs[:]
+    random.seed(RANDOM_SEED)
+    random.shuffle(shuffled)
 
     n = len(shuffled)
     n_train = int(n * TRAIN_FRAC)
     n_val = int(n * VAL_FRAC)
 
-    split_map = {}
-    for i, song in enumerate(shuffled):
+    rows = []
+    for i, (path, label) in enumerate(shuffled):
         if i < n_train:
-            split_map[song] = 'train'
+            split = 'train'
         elif i < n_train + n_val:
-            split_map[song] = 'val'
+            split = 'val'
         else:
-            split_map[song] = 'test'
+            split = 'test'
+        rows.append((path, label, split))
 
-    df['split'] = df['parent'].map(split_map)
-    return df
+    return rows
 
 
 def main():
-    print(f'Loading {CSV_PATH} ...')
-    df = pd.read_csv(CSV_PATH, usecols=['filename', 'label'])
-    print(f'  {len(df):,} rows loaded')
+    print(f'Scanning {AUDIO_DIR} ...')
+    songs = collect_songs()
+    print(f'  {len(songs)} songs  ({CORRUPT_FILE} excluded)')
 
-    df = assign_splits(df)
-    print(f'  {len(df):,} rows after excluding {CORRUPT_SONG!r}')
+    rows = assign_splits(songs)
 
-    db_url = os.environ['DATABASE_URL']
-    conn = psycopg2.connect(db_url)
-
+    conn = get_connection()
     with conn:
         with conn.cursor() as cur:
             cur.execute('TRUNCATE audio_clips RESTART IDENTITY')
-            rows = list(zip(df['filename'], df['label'], df['split']))
             execute_values(
                 cur,
                 'INSERT INTO audio_clips (file_path, label, split) VALUES %s',
                 rows,
             )
-
     conn.close()
 
-    summary = df.groupby('split').size().reindex(['train', 'val', 'test'])
+    from collections import Counter
+    counts = Counter(r[2] for r in rows)
     print('\nInserted rows:')
-    for split_name, count in summary.items():
-        print(f'  {split_name}: {count:,}')
-    print(f'  total: {summary.sum():,}')
+    for split in ['train', 'val', 'test']:
+        print(f'  {split}: {counts[split]}')
+    print(f'  total: {len(rows)}')
 
 
 if __name__ == '__main__':

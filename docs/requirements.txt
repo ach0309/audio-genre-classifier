@@ -2,3 +2,4 @@ pandas
 matplotlib
 librosa
 kagglehub
+psycopg2-binary

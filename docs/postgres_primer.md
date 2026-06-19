@@ -29,46 +29,76 @@ Postgres runs as a background server on your machine. Two separate programs conn
 
 - **`postgres` server**: the database engine running in the background. Start it once and it keeps running.
 - **`psql`**: a terminal program that connects to the server so you can run SQL interactively. Think of it like the Python interactive shell, but for your database.
-- **`psycopg2`**: a Python library that lets scripts talk to Postgres and get results back as Python objects:
+- **`SQLAlchemy` + `psycopg2`**: the Python stack notebooks use. SQLAlchemy builds the SQL; psycopg2 sends it to the server. Results come back as pandas DataFrames via `pd.read_sql()`.
 
 ```
 Python script
-    ↓  (uses psycopg2)
-psycopg2 translates Python into database calls
+    ↓  (uses SQLAlchemy + psycopg2)
+SQLAlchemy builds the query; psycopg2 sends it to the server
     ↓
 Postgres server
     ↓
-results returned as Python objects (lists, dicts, etc.)
+results returned as pandas DataFrames
 ```
 
 ---
 
-## The table
+## The tables
 
-One table, three columns:
+Two tables and a view:
 
 ```sql
+CREATE TABLE labels (
+    label_id     SERIAL PRIMARY KEY,
+    label_name   TEXT NOT NULL UNIQUE,  -- e.g. 'blues'
+    sample_count INT  NOT NULL          -- usable songs for that genre
+);
+
 CREATE TABLE audio_clips (
-    id        SERIAL PRIMARY KEY,
-    file_path TEXT NOT NULL UNIQUE,  -- e.g. data/genres_original/blues/blues.00000.wav
-    label     TEXT NOT NULL,         -- genre name
-    split     TEXT NOT NULL CHECK (split IN ('train', 'val', 'test'))
+    id           SERIAL  PRIMARY KEY,
+    file_path    TEXT    NOT NULL UNIQUE,  -- e.g. data/genres_original/blues/blues.00000.wav
+    label_id     INT     NOT NULL REFERENCES labels(label_id),
+    split        TEXT    NOT NULL CHECK (split IN ('train', 'val', 'test')),
+    is_corrupted BOOLEAN NOT NULL DEFAULT FALSE,
+    is_duplicate BOOLEAN NOT NULL DEFAULT FALSE
 );
 ```
 
-One row per 30-second wav file. `jazz.00054.wav` is left out because it is corrupt and fails to load.
+All 1,000 songs are in `audio_clips`. `jazz.00054.wav` is included but marked `is_corrupted = TRUE` — every query filters it out with `WHERE is_corrupted = FALSE`. `vw_split_summary` is a view that returns usable song counts per split.
 
 ---
 
 ## How splits are assigned
 
-`db/populate.py` scans `data/genres_original/`, skips `jazz.00054.wav`, shuffles the remaining 999 songs with `random.seed(42)`, and splits them:
+`db/populate.py` scans `data/genres_original/`, shuffles all 1,000 songs with `random.seed(42)`, and splits them 70/15/15. `jazz.00054.wav` is included but inserted with `is_corrupted = TRUE` — every query filters it out, so it never reaches the model. The fixed seed means anyone who runs `populate.py` gets the same splits.
 
-- train: 699 songs (70%)
-- val: 149 songs (15%)
-- test: 151 songs (15%)
+Usable songs per split (approximate — exact counts depend on where the corrupt file lands in the shuffle):
 
-The fixed seed means anyone who runs `populate.py` gets the same splits.
+- train: ~700 songs
+- val:   ~150 songs
+- test:  ~150 songs
+
+---
+
+## Password
+
+On Mac with a Homebrew Postgres install, no password is needed. Homebrew sets up **trust authentication** for local connections — it lets you in based on your Mac username, no password required. That is why `.env.example` has `DB_PASSWORD=` left blank.
+
+Your `DB_USER` should be your Mac username (run `whoami` in the terminal if unsure).
+
+If you get an authentication error, run:
+
+```bash
+psql audio_genre_classifier -c "SHOW hba_file;"
+```
+
+Open the file that command prints and look for a line like:
+
+```
+local   all   all   trust
+```
+
+`trust` means no password is needed. If it says `md5` or `scram-sha-256`, a password was set during installation — fill in `DB_PASSWORD` in your `.env` with that password.
 
 ---
 
@@ -80,27 +110,27 @@ PostgreSQL 14+ needs to be installed and running locally first.
 # create the database
 createdb audio_genre_classifier
 
-# create the table
+# create the tables and view
 psql audio_genre_classifier < db/schema.sql
 
-# copy the env template and fill in your local credentials
+# copy the env template and fill in your username
 cp .env.example .env
 
-# populate the table (requires data/genres_original/)
+# populate the tables (requires data/genres_original/)
 python db/populate.py
 
 # verify
 psql audio_genre_classifier < db/queries.sql
 ```
 
-Expected output from the last step:
+Expected output from the last step (usable songs only):
 
 ```
- split | songs
--------+-------
- test  |   151
- train |   699
- val   |   149
+ split | total_files
+-------+-------------
+ test  |         ~150
+ train |         ~700
+ val   |         ~150
 ```
 
 ---

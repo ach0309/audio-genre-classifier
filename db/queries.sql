@@ -1,16 +1,29 @@
--- Pull each split
-SELECT file_path, label FROM audio_clips WHERE split = 'train' ORDER BY file_path;
-SELECT file_path, label FROM audio_clips WHERE split = 'val'   ORDER BY file_path;
-SELECT file_path, label FROM audio_clips WHERE split = 'test'  ORDER BY file_path;
+-- Pull each split (usable files only)
+SELECT ac.file_path, l.label_name AS label
+FROM   audio_clips ac
+JOIN   labels l ON l.label_id = ac.label_id
+WHERE  ac.split = 'train' AND ac.is_corrupted = FALSE AND ac.is_duplicate = FALSE
+ORDER  BY ac.file_path;
 
--- Song counts per genre × split (verify balance)
-SELECT split, label, COUNT(*) AS songs
-FROM   audio_clips
-GROUP  BY split, label
-ORDER  BY split, label;
+SELECT ac.file_path, l.label_name AS label
+FROM   audio_clips ac
+JOIN   labels l ON l.label_id = ac.label_id
+WHERE  ac.split = 'val' AND ac.is_corrupted = FALSE AND ac.is_duplicate = FALSE
+ORDER  BY ac.file_path;
+
+SELECT ac.file_path, l.label_name AS label
+FROM   audio_clips ac
+JOIN   labels l ON l.label_id = ac.label_id
+WHERE  ac.split = 'test' AND ac.is_corrupted = FALSE AND ac.is_duplicate = FALSE
+ORDER  BY ac.file_path;
+
+-- Song counts per genre x split (verify balance)
+SELECT ac.split, l.label_name AS label, COUNT(*) AS songs
+FROM   audio_clips ac
+JOIN   labels l ON l.label_id = ac.label_id
+WHERE  ac.is_corrupted = FALSE AND ac.is_duplicate = FALSE
+GROUP  BY ac.split, l.label_name
+ORDER  BY ac.split, l.label_name;
 
 -- Top-level summary
-SELECT split, COUNT(*) AS songs
-FROM   audio_clips
-GROUP  BY split
-ORDER  BY split;
+SELECT * FROM vw_split_summary;

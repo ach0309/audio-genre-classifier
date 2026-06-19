@@ -3,5 +3,6 @@ matplotlib
 librosa
 kagglehub
 psycopg2-binary
+sqlalchemy
 python-dotenv
 torch

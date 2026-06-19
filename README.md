@@ -16,9 +16,9 @@ audio-genre-classifier/
 │   ├── features_30_sec.csv # Pre-extracted features, 1 row per song
 │   └── features_3_sec.csv  # Pre-extracted features, 10 x 3-second clips per song
 ├── db/
-│   ├── schema.sql          # CREATE TABLE for audio_clips
-│   ├── populate.py         # Reads CSV, assigns splits, inserts into DB
-│   └── queries.sql         # SELECT queries for each split
+│   ├── schema.sql          # CREATE TABLE for labels + audio_clips, view vw_split_summary
+│   ├── populate.py         # Scans genres_original/, assigns splits, inserts into DB
+│   └── queries.sql         # SELECT queries for each split (JOIN labels, filter flags)
 └── docs/
     ├── requirements.txt
     ├── postgres_primer.md  # PostgreSQL intro for new contributors
@@ -29,18 +29,51 @@ audio-genre-classifier/
         └── mfcc_examples_by_genre.png
 ```
 
-## Setup
+## How to run
 
-**Clone the repo and create your branch:**
+Follow these steps in order the first time you set up the project.
+
+**1. Clone the repo and create your branch:**
 ```bash
 git clone git@github.com:ach0309/audio-genre-classifier.git
+cd audio-genre-classifier
 git checkout -b <first-name>-<what-youre-working-on>
 ```
 
-**Install dependencies:**
+**2. Install dependencies:**
 ```bash
-python -m pip install -r docs/requirements.txt
+pip install -r docs/requirements.txt
 ```
+
+**3. Download the dataset:**
+
+Download GTZAN from [Kaggle](https://www.kaggle.com/datasets/andradaolteanu/gtzan-dataset-music-genre-classification) and place the `genres_original/` folder inside `data/` so the path looks like:
+```
+data/
+└── genres_original/
+    ├── blues/
+    ├── classical/
+    └── ...
+```
+
+**4. Set up the database** (see [docs/postgres_primer.md](docs/postgres_primer.md) if you are new to PostgreSQL):
+```bash
+createdb audio_genre_classifier
+psql audio_genre_classifier < db/schema.sql
+cp .env.example .env          # then open .env and set DB_USER to your Mac username
+python db/populate.py
+```
+
+**5. Run the notebooks in order:**
+
+| Notebook | What it does | Prerequisites |
+|---|---|---|
+| `1_explore.ipynb` | EDA — understand the dataset | dataset downloaded |
+| `2_transform.ipynb` | Preprocessing — builds DataLoaders | database populated |
+| `3_model.ipynb` | Model training | `2_transform.ipynb` run |
+| `4_predict.ipynb` | Inference | trained model |
+
+---
 
 ## Database setup
 
@@ -69,13 +102,13 @@ python db/populate.py
 psql audio_genre_classifier < db/queries.sql
 ```
 
-Expected output from step 5:
+Expected output from step 5 (usable songs only — `jazz.00054.wav` is in the DB but filtered):
 ```
- split | songs
--------+-------
- test  |   151
- train |   699
- val   |   149
+ split | total_files
+-------+-------------
+ test  |  ~150
+ train |  ~700
+ val   |  ~150
 ```
 
 ## Dataset
@@ -117,13 +150,14 @@ Key findings relevant to preprocessing:
 - Splits must be done at the **parent-song level** to avoid data leakage
 - Drop `jazz.00054` before splitting
 
-### `2_transform.ipynb`: Preprocessing (in progress)
+### `2_transform.ipynb`: Preprocessing (complete)
 
-Planned:
-- Drop metadata columns (`filename`, `length`)
-- Encode `label` to integers
-- Parent-song-level train/val/test split
-- `StandardScaler` fit on train set, applied to val and test
+- Connects to PostgreSQL, queries `audio_clips` JOIN `labels` filtered by `is_corrupted = FALSE`
+- Verifies data quality (nulls, duplicates, corrupt-file exclusion)
+- Encodes `label` to integers for PyTorch
+- Builds `AudioDataset` (librosa load → pad/truncate → log-mel spectrogram)
+- Applies waveform and frequency-mask augmentations on training examples
+- Returns `train_loader`, `val_loader`, `test_loader` of normalized mel spectrogram tensors
 
 ### `3_model.ipynb`: Model training (not started)
 

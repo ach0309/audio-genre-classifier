@@ -138,8 +138,8 @@ The dataset is downloadable from this [Kaggle link](https://www.kaggle.com/datas
 
 Sprint 2 moved the project from initial EDA into preprocessing, modeling setup, and database integration:
 
-- Completed GTZAN dataset research covering benchmark value, prior music classification work, and known dataset limitations such as mislabels, repetitions, distortions, and artist repetition.
-- Added audio feature research explaining waveforms, sample rate, spectrograms, MFCCs, and how `librosa` supports feature extraction.
+- Completed GTZAN dataset research covering benchmark value, prior music classification work, and known dataset limitations such as mislabels, repetitions, distortions, and artist repetition. (continued work from Sprint 1)
+- Added audio feature research explaining waveforms, sample rate, spectrograms, MFCCs, and how `librosa` supports feature extraction. (continued work from Sprint 1)
 - Built the preprocessing pipeline in `2_transform.ipynb` — connects to PostgreSQL for authoritative split assignments, loads audio clips, normalizes clip length, converts audio to mel spectrograms, encodes labels, and prepares PyTorch-ready tensors.
 - Added `AudioDataset` and train/validation/test `DataLoader` scaffolding so the modeling notebook can consume batches directly.
 - Added a verification cell confirming batch shape, tensor dtype, label dtype, and finite feature values before model training.

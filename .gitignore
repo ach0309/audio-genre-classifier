@@ -1,5 +1,6 @@
 data/
 reports/
+models/
 .env
 .matplotlib-cache/
 **/.numba-cache/

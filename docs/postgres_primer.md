@@ -51,7 +51,7 @@ Two tables and a view:
 CREATE TABLE labels (
     label_id     SERIAL PRIMARY KEY,
     label_name   TEXT NOT NULL UNIQUE,  -- e.g. 'blues'
-    sample_count INT  NOT NULL          -- usable songs for that genre
+    sample_count INT  NOT NULL DEFAULT 0 -- usable songs for that genre
 );
 
 CREATE TABLE audio_clips (

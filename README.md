@@ -10,7 +10,8 @@ audio-genre-classifier/
 │   ├── 1_explore.ipynb     # EDA
 │   ├── 2_transform.ipynb   # Preprocessing & feature engineering
 │   ├── 3_model.ipynb       # Model training & evaluation 
-│   └── 4_predict.ipynb     
+│   ├── 4_predict.ipynb     
+│   └── common.py           # Shared helpers/model used by the 3 notebooks above — see setup notes at the bottom of the file
 ├── data/
 │   ├── genres_original/    # Raw .wav files (not committed, see setup below)
 │   ├── features_30_sec.csv # Pre-extracted features, 1 row per song
@@ -146,6 +147,10 @@ Sprint 2 moved the project from initial EDA into preprocessing, modeling setup, 
 - Added PostgreSQL schema (`db/schema.sql`), migration scripts, and `db/populate.py` to assign reproducible train/val/test splits at the parent-song level using a fixed random seed.
 
 ## Notebooks
+
+### Shared code — `code/common.py`
+
+`2_transform.ipynb`, `3_model.ipynb`, and `4_predict.ipynb` share the same preprocessing helpers (`load_split`, `pad_or_truncate`, `audio_to_mel_spectrogram`, augmentation functions), the `AudioDataset` class, and the `AudioCNN` model — all defined once in `code/common.py` and imported by each notebook, instead of being copy-pasted three times. It must stay in `code/`, alongside the notebooks that import it. **See the checklist at the bottom of `code/common.py`** for what to do after pulling changes to it (kernel restarts, run order, etc.).
 
 ### `1_explore.ipynb` — EDA (complete)
 

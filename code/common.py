@@ -9,13 +9,12 @@ those imports on the next kernel restart.
 This is a plain module, not a notebook — it has no kernel state of its own, so
 each notebook can still be independently "restart kernel, run top to bottom":
 they just import a static file from disk, the same as any other dependency
-(e.g. librosa). What's lost versus copy-paste is the "hand someone one .ipynb
-and nothing else" property; what's gained is that a fix or guard only needs to
-be made once instead of hand-synced across three copies.
-
-See the bottom of this file for a teammate setup/run checklist.
+(e.g. librosa).
 """
 
+from __future__ import annotations
+
+import os
 from pathlib import Path
 
 import librosa
@@ -23,8 +22,10 @@ import numpy as np
 import pandas as pd
 import torch
 import torch.nn as nn
-from sqlalchemy import text
-from torch.utils.data import Dataset
+from dotenv import load_dotenv
+from sqlalchemy import create_engine, text
+from torch.utils.data import DataLoader, Dataset
+
 
 RANDOM_SEED = 42
 SAMPLE_RATE = 22_050
@@ -32,7 +33,9 @@ CLIP_DURATION_SECONDS = 30
 N_MELS = 128
 N_FFT = 2048
 HOP_LENGTH = 512
+BATCH_SIZE = 16
 FREQ_MASK_MAX_WIDTH = 16
+
 FIXED_NUM_SAMPLES = SAMPLE_RATE * CLIP_DURATION_SECONDS
 
 
@@ -44,13 +47,23 @@ def find_repo_root(start: Path) -> Path:
     raise FileNotFoundError("Could not find the audio-genre-classifier repo root.")
 
 
-REPO_ROOT = find_repo_root(Path(__file__).resolve().parent)
+def build_engine(repo_root: Path):
+    load_dotenv(repo_root / ".env")
+    db_user = os.getenv("DB_USER")
+    db_password = os.getenv("DB_PASSWORD", "")
+    db_host = "localhost"
+    db_port = 5432
+    db_name = "audio_genre_classifier"
+    return create_engine(
+        f"postgresql+psycopg2://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
+    )
 
 
-def load_split(split_name: str, engine) -> pd.DataFrame:
-    """Load usable (non-corrupted, non-duplicate) songs for one split."""
-    assert split_name in ("train", "val", "test"), \
-        f"split_name must be 'train', 'val', or 'test' — got '{split_name}'"
+def load_split(split_name: str, engine, repo_root: Path) -> pd.DataFrame:
+    """Load usable non-corrupted, non-duplicate songs for one split."""
+    if split_name not in ("train", "val", "test"):
+        raise ValueError(f"split_name must be 'train', 'val', or 'test'; got {split_name!r}")
+
     query = text("""
         SELECT ac.file_path, l.label_name AS label, ac.split
         FROM   audio_clips ac
@@ -61,42 +74,44 @@ def load_split(split_name: str, engine) -> pd.DataFrame:
         ORDER  BY ac.file_path
     """)
     df = pd.read_sql(sql=query, con=engine, params={"split_name": split_name})
-    df["file_path"] = df["file_path"].apply(lambda p: str(REPO_ROOT / p))
+    df["file_path"] = df["file_path"].apply(lambda path: str(repo_root / path))
     return df
 
 
+def load_label_mapping(engine) -> tuple[dict[str, int], dict[int, str]]:
+    query = text("""
+        SELECT DISTINCT l.label_name AS label
+        FROM   audio_clips ac
+        JOIN   labels l ON l.label_id = ac.label_id
+        WHERE  ac.is_corrupted = FALSE
+          AND  ac.is_duplicate = FALSE
+        ORDER  BY l.label_name
+    """)
+    labels = pd.read_sql(sql=query, con=engine)["label"].tolist()
+    label_to_idx = {label: idx for idx, label in enumerate(labels)}
+    idx_to_label = {idx: label for label, idx in label_to_idx.items()}
+    return label_to_idx, idx_to_label
+
+
 def pad_or_truncate(audio: np.ndarray, target_num_samples: int) -> np.ndarray:
-    """Return audio with exactly target_num_samples samples."""
     if len(audio) > target_num_samples:
         return audio[:target_num_samples]
-
     if len(audio) < target_num_samples:
-        padding = target_num_samples - len(audio)
-        return np.pad(audio, (0, padding), mode="constant")
-
+        return np.pad(audio, (0, target_num_samples - len(audio)), mode="constant")
     return audio
 
 
 def augment_waveform(audio: np.ndarray) -> np.ndarray:
-    """Apply light waveform augmentations for training examples only."""
-    # Random gain changes volume without changing genre identity.
     gain = np.random.uniform(0.8, 1.2)
     audio = audio * gain
-
-    # Small time shift makes the model less dependent on exact alignment.
     max_shift = int(0.1 * SAMPLE_RATE)
     shift = np.random.randint(-max_shift, max_shift + 1)
     audio = np.roll(audio, shift)
-
-    # Low-amplitude noise can improve robustness.
     noise = np.random.normal(0, 0.005, size=audio.shape)
-    audio = audio + noise
-
-    return audio.astype(np.float32)
+    return (audio + noise).astype(np.float32)
 
 
 def audio_to_mel_spectrogram(audio: np.ndarray) -> np.ndarray:
-    """Convert waveform audio into a normalized log-mel spectrogram."""
     mel = librosa.feature.melspectrogram(
         y=audio,
         sr=SAMPLE_RATE,
@@ -106,22 +121,17 @@ def audio_to_mel_spectrogram(audio: np.ndarray) -> np.ndarray:
         power=2.0,
     )
     mel_db = librosa.power_to_db(mel, ref=np.max)
-
-    # Normalize each spectrogram to a stable range for model input.
     mel_db = (mel_db - mel_db.mean()) / (mel_db.std() + 1e-6)
     return mel_db.astype(np.float32)
 
 
 def augment_mel_spectrogram(mel: np.ndarray) -> np.ndarray:
-    """Apply light frequency masking for training spectrograms only."""
     mel = mel.copy()
     max_width = min(FREQ_MASK_MAX_WIDTH, mel.shape[0])
     mask_width = np.random.randint(0, max_width + 1)
-
     if mask_width > 0:
         start = np.random.randint(0, mel.shape[0] - mask_width + 1)
         mel[start:start + mask_width, :] = 0.0
-
     return mel.astype(np.float32)
 
 
@@ -163,31 +173,65 @@ class AudioDataset(Dataset):
         return features, target
 
 
+def build_dataloader(
+    split_name: str,
+    engine,
+    repo_root: Path,
+    label_to_idx: dict[str, int],
+    augment: bool = False,
+    batch_size: int = BATCH_SIZE,
+    shuffle: bool = False,
+) -> DataLoader:
+    split_df = load_split(split_name, engine, repo_root)
+    dataset = AudioDataset(split_df, label_to_idx=label_to_idx, augment=augment)
+    return DataLoader(dataset, batch_size=batch_size, shuffle=shuffle)
+
+
 class AudioCNN(nn.Module):
     """3-block CNN for mel spectrogram genre classification."""
 
     def __init__(self, num_classes: int = 10):
         super().__init__()
-        self.block1 = nn.Sequential(
-            nn.Conv2d(1, 32, kernel_size=3, padding=1), nn.BatchNorm2d(32),
-            nn.ReLU(), nn.MaxPool2d(kernel_size=2, stride=2))
-        self.block2 = nn.Sequential(
-            nn.Conv2d(32, 64, kernel_size=3, padding=1), nn.BatchNorm2d(64),
-            nn.ReLU(), nn.MaxPool2d(kernel_size=2, stride=2))
-        self.block3 = nn.Sequential(
-            nn.Conv2d(64, 128, kernel_size=3, padding=1), nn.BatchNorm2d(128),
-            nn.ReLU(), nn.MaxPool2d(kernel_size=2, stride=2))
-        self.adaptive_pool = nn.AdaptiveAvgPool2d((4, 4))
-        self.classifier = nn.Sequential(
-            nn.Flatten(), nn.Linear(128 * 4 * 4, 256), nn.ReLU(),
-            nn.Dropout(0.5), nn.Linear(256, num_classes))
 
-    def forward(self, x):
+        self.block1 = nn.Sequential(
+            nn.Conv2d(1, 32, kernel_size=3, padding=1),
+            nn.BatchNorm2d(32),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+        )
+
+        self.block2 = nn.Sequential(
+            nn.Conv2d(32, 64, kernel_size=3, padding=1),
+            nn.BatchNorm2d(64),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+        )
+
+        self.block3 = nn.Sequential(
+            nn.Conv2d(64, 128, kernel_size=3, padding=1),
+            nn.BatchNorm2d(128),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+        )
+
+        # Reduces [128, 16, 161] -> [128, 4, 4] regardless of input time-axis length.
+        self.adaptive_pool = nn.AdaptiveAvgPool2d((4, 4))
+
+        self.classifier = nn.Sequential(
+            nn.Flatten(),
+            nn.Linear(128 * 4 * 4, 256),
+            nn.ReLU(),
+            nn.Dropout(0.5),
+            nn.Linear(256, num_classes),
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.block1(x)
         x = self.block2(x)
         x = self.block3(x)
         x = self.adaptive_pool(x)
-        return self.classifier(x)
+        x = self.classifier(x)
+        return x
 
 
 # -----------------------------------------------------------------------------
@@ -202,8 +246,8 @@ class AudioCNN(nn.Module):
 #    their imports.
 #
 # 2. No new dependencies to install — this module only uses libraries the
-#    notebooks already imported (librosa, torch, pandas, numpy, sqlalchemy).
-#    Nothing new to add to requirements.
+#    notebooks already imported (librosa, torch, pandas, numpy, sqlalchemy,
+#    python-dotenv).
 #
 # 3. Restart your kernel before running any of the three notebooks if you had
 #    one open from before this change — an old kernel won't know about the
@@ -216,8 +260,9 @@ class AudioCNN(nn.Module):
 #      clear error if step 2 hasn't been run yet, same as before).
 #
 # 5. Same environment requirements as always — a running local Postgres with
-#    the audio_genre_classifier DB populated, and a .env with DB credentials.
-#    This refactor doesn't change any of that.
+#    the audio_genre_classifier DB populated, and a .env with DB credentials
+#    (build_engine() reads DB_USER / DB_PASSWORD from it). This refactor
+#    doesn't change any of that.
 #
 # 6. Keep common.py in code/, next to the notebooks — don't move it. The
 #    import relies on it being a sibling file in the same folder.

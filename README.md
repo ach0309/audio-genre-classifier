@@ -183,6 +183,25 @@ Builds the full audio preprocessing path for model training:
 - Creates train, validation, and test `DataLoader` objects
 - Verifies that a training batch has shape `torch.Size([16, 1, 128, 1292])`, uses `float32` features, uses `int64` labels, and contains only finite feature values
 
-### `3_model.ipynb` — Model training (not started)
+### `3_model.ipynb` — Model training (complete)
 
-### `4_predict.ipynb` — Inference (not started)
+Defines and trains the CNN used to classify genres from mel spectrograms:
+
+- Re-instantiates the train/val/test `DataLoader`s using `code/common.py`
+- Imports `AudioCNN` (three Conv2d → BatchNorm2d → ReLU → MaxPool2d blocks, adaptive average pooling, and a fully-connected classifier head with dropout) from `code/common.py`
+- Verifies the forward pass produces the expected `[batch, 10]` output shape
+- Trains with `CrossEntropyLoss` and `Adam(lr=1e-3)` for up to 10 epochs, with early stopping after 3 epochs without a validation-accuracy improvement
+- Saves the best checkpoint (by validation accuracy) to `models/best_model.pth` as a dict containing `model_state_dict`, `label_to_idx`, `idx_to_label`, and training history
+- Plots and saves training/validation loss and validation accuracy curves to `docs/images/training_curves.png`
+
+### `4_predict.ipynb` — Inference and evaluation (complete)
+
+Evaluates the trained model on the held-out test split:
+
+- Loads `models/best_model.pth`, requiring the canonical checkpoint dict schema (fails fast with a clear error on older formats)
+- Builds only the test `DataLoader` via `code/common.py` — no `%run` of another notebook, so it never touches train/val audio
+- Runs inference over the test set and reports overall test accuracy
+- Saves a confusion matrix to `docs/images/confusion_matrix.png` and prints a full classification report (precision/recall/F1 per genre)
+- Identifies the strongest/weakest genres by F1 and the largest confusion pairs
+- Interprets the training loss curves using the history stored in the checkpoint
+- Writes a final evaluation summary to `docs/eval_results.md` (a standalone file — the notebook does not rewrite its own `.ipynb` during execution)

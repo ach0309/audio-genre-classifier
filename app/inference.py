@@ -1,14 +1,23 @@
-"""Loads the trained checkpoint once and predicts a genre for an uploaded audio file.
+"""Loads the trained checkpoint once and analyzes an uploaded audio file.
 
 Reuses the exact preprocessing pipeline and architecture from code/common.py so a
 prediction here goes through the same steps as evaluation in 4_predict.ipynb: load
-audio -> pad/truncate to 30s -> log-mel spectrogram -> AudioCNN -> softmax.
+audio -> pad/truncate to 30s -> log-mel spectrogram -> AudioCNN -> softmax. The same
+mel array is also rendered to a PNG so the frontend can show exactly what the model
+classified, not a separately-computed visualization.
 """
 
 from __future__ import annotations
 
+import base64
+import io
 import sys
 from pathlib import Path
+
+import matplotlib
+
+matplotlib.use("Agg")  # headless server process — must be set before pyplot import
+import matplotlib.pyplot as plt
 
 
 def _find_repo_root(start: Path) -> Path:
@@ -23,6 +32,7 @@ REPO_ROOT = _find_repo_root(Path(__file__).parent)
 sys.path.insert(0, str(REPO_ROOT / "code"))
 
 import librosa
+import numpy as np
 import torch
 import torch.nn.functional as F
 
@@ -55,14 +65,9 @@ def load_model() -> None:
     _idx_to_label = idx_to_label
 
 
-def predict_genre(audio_path: str) -> list[tuple[str, float]]:
-    """Returns [(genre, probability), ...] sorted by probability, most likely first."""
+def _predict_from_mel(mel: np.ndarray) -> list[tuple[str, float]]:
     if _model is None or _idx_to_label is None:
         raise RuntimeError("Model is not loaded. Call load_model() first.")
-
-    audio, _ = librosa.load(audio_path, sr=SAMPLE_RATE, mono=True)
-    audio = pad_or_truncate(audio, FIXED_NUM_SAMPLES)
-    mel = audio_to_mel_spectrogram(audio)
 
     features = torch.tensor(mel, dtype=torch.float32).unsqueeze(0).unsqueeze(0)
 
@@ -72,3 +77,34 @@ def predict_genre(audio_path: str) -> list[tuple[str, float]]:
 
     results = [(_idx_to_label[idx], probabilities[idx].item()) for idx in range(len(_idx_to_label))]
     return sorted(results, key=lambda pair: pair[1], reverse=True)
+
+
+def _render_mel_spectrogram_png(mel: np.ndarray) -> str:
+    """Renders the already-computed mel array to a base64 PNG data URI."""
+    fig, ax = plt.subplots(figsize=(6, 3), dpi=120)
+    ax.imshow(mel, origin="lower", aspect="auto", cmap="magma")
+    ax.axis("off")
+    fig.patch.set_alpha(0)
+
+    buffer = io.BytesIO()
+    fig.savefig(buffer, format="png", transparent=True, bbox_inches="tight", pad_inches=0)
+    plt.close(fig)
+
+    encoded = base64.b64encode(buffer.getvalue()).decode("ascii")
+    return f"data:image/png;base64,{encoded}"
+
+
+def analyze_audio(audio_path: str) -> dict:
+    """Returns {"predictions": [(genre, probability), ...], "spectrogram_png": "data:..."}.
+
+    Computes the mel spectrogram once and reuses it for both the prediction and the
+    visualization, so the image shown is exactly what the model classified.
+    """
+    audio, _ = librosa.load(audio_path, sr=SAMPLE_RATE, mono=True)
+    audio = pad_or_truncate(audio, FIXED_NUM_SAMPLES)
+    mel = audio_to_mel_spectrogram(audio)
+
+    return {
+        "predictions": _predict_from_mel(mel),
+        "spectrogram_png": _render_mel_spectrogram_png(mel),
+    }

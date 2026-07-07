@@ -2,82 +2,271 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Audio Genre Classifier</title>
 <style>
-  :root { color-scheme: light dark; }
+  :root {
+    color-scheme: dark;
+    --bg-base: #06070c;
+    --bg-base-2: #0b0e1a;
+    --accent-purple: #a855f7;
+    --accent-purple-hover: #c084fc;
+    --accent-pink: #ec4899;
+    --accent-cyan: #22d3ee;
+    --text-primary: #f5f3ff;
+    --text-secondary: rgba(245, 243, 255, 0.65);
+    --text-muted: rgba(245, 243, 255, 0.45);
+    --glass-bg: rgba(20, 18, 36, 0.55);
+    --glass-border: rgba(255, 255, 255, 0.12);
+    --error: #f87171;
+  }
+
+  * { box-sizing: border-box; }
+
   body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     max-width: 640px;
-    margin: 3rem auto;
-    padding: 0 1.5rem;
-    color: #1a1a1a;
+    margin: 0 auto;
+    padding: 3rem 1.5rem 4rem;
+    min-height: 100vh;
+    color: var(--text-primary);
+    background:
+      radial-gradient(circle at 15% 20%, rgba(168, 85, 247, 0.35), transparent 45%),
+      radial-gradient(circle at 85% 15%, rgba(236, 72, 153, 0.28), transparent 50%),
+      radial-gradient(circle at 75% 80%, rgba(34, 211, 238, 0.25), transparent 45%),
+      radial-gradient(circle at 25% 85%, rgba(249, 115, 22, 0.18), transparent 50%),
+      linear-gradient(180deg, var(--bg-base-2) 0%, var(--bg-base) 100%);
+    background-attachment: fixed;
   }
-  h1 { font-size: 1.5rem; margin-bottom: 0.25rem; }
-  p.subtitle { color: #666; margin-top: 0; }
+
+  h1 {
+    font-size: 1.75rem;
+    margin-bottom: 0.25rem;
+    background: linear-gradient(135deg, #f5f3ff 0%, #d8b4fe 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  p.subtitle { color: var(--text-secondary); margin-top: 0; }
+
+  .glass-panel {
+    background: var(--glass-bg);
+    backdrop-filter: blur(20px) saturate(140%);
+    -webkit-backdrop-filter: blur(20px) saturate(140%);
+    border: 1px solid var(--glass-border);
+    border-radius: 20px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    padding: 1.75rem;
+    margin-top: 1.5rem;
+  }
+
+  .sample-chips { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.45rem 0.9rem;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    color: var(--text-primary);
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .chip:hover { background: rgba(168, 85, 247, 0.18); border-color: var(--accent-purple); }
+  .chip:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .divider {
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    text-align: center;
+    margin: 1rem 0;
+  }
+
   .dropzone {
-    border: 2px dashed #999;
-    border-radius: 12px;
-    padding: 2rem;
+    border: 2px dashed rgba(168, 85, 247, 0.45);
+    border-radius: 14px;
+    padding: 1.75rem;
     text-align: center;
     cursor: pointer;
     transition: border-color 0.15s, background 0.15s;
   }
-  .dropzone.dragover { border-color: #4f46e5; background: #f5f4ff; }
+  .dropzone.dragover { border-color: var(--accent-purple-hover); background: rgba(168, 85, 247, 0.12); }
   .dropzone input { display: none; }
-  #filename { margin-top: 0.75rem; font-size: 0.9rem; color: #444; }
-  button {
+  #filename { margin-top: 0.6rem; font-size: 0.85rem; color: var(--text-secondary); }
+
+  audio { width: 100%; margin-top: 1rem; }
+
+  button#submitBtn {
     margin-top: 1.25rem;
     width: 100%;
     padding: 0.75rem;
     font-size: 1rem;
     font-weight: 600;
     border: none;
-    border-radius: 8px;
-    background: #4f46e5;
-    color: white;
+    border-radius: 10px;
+    background: linear-gradient(135deg, #a855f7 0%, #ec4899 50%, #22d3ee 100%);
+    color: #0b0e1a;
     cursor: pointer;
   }
-  button:disabled { background: #b3b0e6; cursor: not-allowed; }
-  #results { margin-top: 2rem; }
-  .bar-row { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.6rem; }
-  .bar-label { width: 90px; font-size: 0.9rem; text-align: right; text-transform: capitalize; }
-  .bar-track { flex: 1; background: #eee; border-radius: 6px; overflow: hidden; height: 20px; }
-  .bar-fill {
-    height: 100%;
-    background: linear-gradient(90deg, #4f46e5, #818cf8);
-    transition: width 0.4s ease;
+  button#submitBtn:disabled { background: rgba(168, 85, 247, 0.25); color: var(--text-muted); cursor: not-allowed; }
+
+  #status { color: var(--accent-cyan); margin-top: 1rem; display: none; font-size: 0.9rem; }
+  #error {
+    color: var(--error);
+    background: rgba(248, 113, 113, 0.1);
+    border: 1px solid rgba(248, 113, 113, 0.3);
+    border-radius: 8px;
+    padding: 0.6rem 0.9rem;
+    margin-top: 1rem;
+    display: none;
+    font-size: 0.9rem;
   }
-  .bar-pct { width: 48px; font-size: 0.85rem; color: #444; }
-  #error { color: #b91c1c; margin-top: 1rem; display: none; }
-  #status { color: #666; margin-top: 1rem; display: none; }
+
+  #results { margin-top: 1.75rem; display: none; }
+  .framing { color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem; }
+
+  .hero {
+    text-align: center;
+    padding: 1.25rem 0;
+  }
+  .hero-emoji { font-size: 2.5rem; display: block; }
+  .hero-genre {
+    font-size: 2.25rem;
+    font-weight: 700;
+    text-transform: capitalize;
+    background: linear-gradient(135deg, var(--accent-purple) 0%, var(--accent-pink) 50%, var(--accent-cyan) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    filter: drop-shadow(0 0 18px rgba(236, 72, 153, 0.35));
+  }
+  .hero-pct { font-size: 1.1rem; color: var(--text-secondary); }
+
+  .runner-ups { margin-top: 1rem; }
+  .bar-row { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.5rem; }
+  .bar-label { width: 100px; font-size: 0.85rem; text-align: right; text-transform: capitalize; color: var(--text-secondary); }
+  .bar-track { flex: 1; background: rgba(255, 255, 255, 0.08); border-radius: 6px; overflow: hidden; height: 14px; }
+  .bar-fill { height: 100%; background: linear-gradient(90deg, #7c3aed, #22d3ee); transition: width 0.4s ease; }
+  .bar-pct { width: 44px; font-size: 0.8rem; color: var(--text-muted); }
+
+  .spectrogram-section { margin-top: 1.75rem; text-align: center; }
+  .spectrogram-section h3 { font-size: 0.95rem; color: var(--text-secondary); font-weight: 600; margin-bottom: 0.5rem; }
+  .spectrogram-section img { max-width: 100%; border-radius: 10px; border: 1px solid var(--glass-border); }
+  .spectrogram-caption { font-size: 0.78rem; color: var(--text-muted); margin-top: 0.5rem; }
+
+  footer { margin-top: 2.5rem; color: var(--text-muted); font-size: 0.78rem; text-align: center; line-height: 1.5; }
 </style>
 </head>
 <body>
   <h1>Audio Genre Classifier</h1>
-  <p class="subtitle">Upload a song and see the model's predicted genre breakdown.</p>
+  <p class="subtitle">Upload a track (or try a sample) — here's the model's best guess.</p>
 
-  <div class="dropzone" id="dropzone">
-    <div>Click to choose a file, or drag one here</div>
-    <div id="filename">No file selected</div>
-    <input type="file" id="fileInput" accept=".wav,.mp3,.flac,.ogg,.m4a" />
+  <div class="glass-panel">
+    <div class="sample-chips" id="sampleChips"></div>
+    <div class="divider">or upload your own</div>
+
+    <div class="dropzone" id="dropzone">
+      <div>Click to choose a file, or drag one here</div>
+      <div id="filename">No file selected</div>
+      <input type="file" id="fileInput" accept=".wav,.mp3,.flac,.ogg,.m4a" />
+    </div>
+
+    <audio id="player" controls hidden></audio>
+
+    <button id="submitBtn" disabled>Analyze Track</button>
+    <div id="status">Running inference...</div>
+    <div id="error"></div>
   </div>
 
-  <button id="submitBtn" disabled>Predict Genre</button>
-  <div id="status">Running inference...</div>
-  <div id="error"></div>
-  <div id="results"></div>
+  <div id="results">
+    <p class="framing">Best guess (right about 1 in 3 times on unseen tracks):</p>
+
+    <div class="hero" id="hero"></div>
+    <div class="runner-ups" id="runnerUps"></div>
+
+    <div class="spectrogram-section">
+      <h3>What the model sees</h3>
+      <img id="spectrogram" alt="Mel spectrogram of the analyzed clip" />
+      <p class="spectrogram-caption">
+        Log-mel spectrogram — frequency (low → high, bottom → top) over time.
+        This is the actual input the CNN classifies, not the raw waveform.
+      </p>
+    </div>
+  </div>
+
+  <footer>
+    Trained on the GTZAN dataset (1,000 30-second clips, 10 genres) with a compact CNN.
+    Test accuracy is roughly 30–34% — well above the 10% random baseline, but these are
+    best guesses, not verdicts.
+  </footer>
 
   <script>
+    const GENRE_META = {
+      blues:     { emoji: "🎷", color: "#3b82f6" },
+      classical: { emoji: "🎻", color: "#e5e7eb" },
+      country:   { emoji: "🤠", color: "#ca8a04" },
+      disco:     { emoji: "🕺", color: "#ec4899" },
+      hiphop:    { emoji: "🎤", color: "#f97316" },
+      jazz:      { emoji: "🎺", color: "#f59e0b" },
+      metal:     { emoji: "🤘", color: "#94a3b8" },
+      pop:       { emoji: "💫", color: "#38bdf8" },
+      reggae:    { emoji: "🌴", color: "#22c55e" },
+      rock:      { emoji: "🎸", color: "#ef4444" },
+    };
+
+    const SAMPLE_TRACKS = [
+      { genre: "blues", file: "/samples/blues_sample.wav" },
+      { genre: "classical", file: "/samples/classical_sample.wav" },
+      { genre: "hiphop", file: "/samples/hiphop_sample.wav" },
+      { genre: "metal", file: "/samples/metal_sample.wav" },
+      { genre: "reggae", file: "/samples/reggae_sample.wav" },
+    ];
+
     const dropzone = document.getElementById("dropzone");
     const fileInput = document.getElementById("fileInput");
     const filenameEl = document.getElementById("filename");
     const submitBtn = document.getElementById("submitBtn");
+    const player = document.getElementById("player");
     const resultsEl = document.getElementById("results");
+    const heroEl = document.getElementById("hero");
+    const runnerUpsEl = document.getElementById("runnerUps");
+    const spectrogramEl = document.getElementById("spectrogram");
     const errorEl = document.getElementById("error");
     const statusEl = document.getElementById("status");
+    const sampleChipsEl = document.getElementById("sampleChips");
 
     let selectedFile = null;
 
+    // --- Sample chips ---
+    for (const { genre, file } of SAMPLE_TRACKS) {
+      const meta = GENRE_META[genre];
+      const chip = document.createElement("button");
+      chip.className = "chip";
+      chip.type = "button";
+      chip.innerHTML = `${meta.emoji} ${genre}`;
+      chip.addEventListener("click", () => loadSample(genre, file, chip));
+      sampleChipsEl.appendChild(chip);
+    }
+
+    async function loadSample(genre, url, chipEl) {
+      const allChips = sampleChipsEl.querySelectorAll(".chip");
+      allChips.forEach((c) => (c.disabled = true));
+      try {
+        const response = await fetch(url);
+        const blob = await response.blob();
+        const file = new File([blob], `${genre}_sample.wav`, { type: blob.type || "audio/wav" });
+        setFile(file);
+        player.src = url;
+        player.hidden = false;
+        await runPrediction(file);
+      } finally {
+        allChips.forEach((c) => (c.disabled = false));
+      }
+    }
+
+    // --- Upload / drag-drop ---
     dropzone.addEventListener("click", () => fileInput.click());
 
     dropzone.addEventListener("dragover", (e) => {
@@ -88,31 +277,43 @@
     dropzone.addEventListener("drop", (e) => {
       e.preventDefault();
       dropzone.classList.remove("dragover");
-      if (e.dataTransfer.files.length) setFile(e.dataTransfer.files[0]);
+      if (e.dataTransfer.files.length) {
+        const file = e.dataTransfer.files[0];
+        setFile(file);
+        player.src = URL.createObjectURL(file);
+        player.hidden = false;
+      }
     });
 
     fileInput.addEventListener("change", () => {
-      if (fileInput.files.length) setFile(fileInput.files[0]);
+      if (fileInput.files.length) {
+        const file = fileInput.files[0];
+        setFile(file);
+        player.src = URL.createObjectURL(file);
+        player.hidden = false;
+      }
     });
 
     function setFile(file) {
       selectedFile = file;
       filenameEl.textContent = file.name;
       submitBtn.disabled = false;
-      resultsEl.innerHTML = "";
+      resultsEl.style.display = "none";
       errorEl.style.display = "none";
     }
 
-    submitBtn.addEventListener("click", async () => {
-      if (!selectedFile) return;
+    submitBtn.addEventListener("click", () => {
+      if (selectedFile) runPrediction(selectedFile);
+    });
 
+    async function runPrediction(file) {
       submitBtn.disabled = true;
       statusEl.style.display = "block";
       errorEl.style.display = "none";
-      resultsEl.innerHTML = "";
+      resultsEl.style.display = "none";
 
       const formData = new FormData();
-      formData.append("file", selectedFile);
+      formData.append("file", file);
 
       try {
         const response = await fetch("/predict", { method: "POST", body: formData });
@@ -122,7 +323,7 @@
           throw new Error(data.detail || "Prediction failed.");
         }
 
-        renderResults(data.predictions);
+        renderResults(data.predictions, data.spectrogram_png);
       } catch (err) {
         errorEl.textContent = err.message;
         errorEl.style.display = "block";
@@ -130,11 +331,21 @@
         statusEl.style.display = "none";
         submitBtn.disabled = false;
       }
-    });
+    }
 
-    function renderResults(predictions) {
-      resultsEl.innerHTML = "";
-      for (const { genre, probability } of predictions) {
+    function renderResults(predictions, spectrogramPngDataUri) {
+      const top3 = predictions.slice(0, 3);
+      const [first, ...rest] = top3;
+      const firstMeta = GENRE_META[first.genre] || { emoji: "🎵" };
+
+      heroEl.innerHTML = `
+        <span class="hero-emoji">${firstMeta.emoji}</span>
+        <div class="hero-genre">${first.genre}</div>
+        <div class="hero-pct">${(first.probability * 100).toFixed(1)}%</div>
+      `;
+
+      runnerUpsEl.innerHTML = "";
+      for (const { genre, probability } of rest) {
         const pct = (probability * 100).toFixed(1);
         const row = document.createElement("div");
         row.className = "bar-row";
@@ -143,8 +354,11 @@
           <div class="bar-track"><div class="bar-fill" style="width: ${pct}%"></div></div>
           <div class="bar-pct">${pct}%</div>
         `;
-        resultsEl.appendChild(row);
+        runnerUpsEl.appendChild(row);
       }
+
+      spectrogramEl.src = spectrogramPngDataUri;
+      resultsEl.style.display = "block";
     }
   </script>
 </body>

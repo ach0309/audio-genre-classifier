@@ -13,7 +13,7 @@ import tempfile
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.staticfiles import StaticFiles
 
-from app.inference import load_model, predict_genre
+from app.inference import analyze_audio, load_model
 
 app = FastAPI(title="Audio Genre Classifier Demo")
 
@@ -39,12 +39,15 @@ async def predict(file: UploadFile = File(...)) -> dict:
         shutil.copyfileobj(file.file, tmp)
         tmp.flush()
         try:
-            predictions = predict_genre(tmp.name)
+            result = analyze_audio(tmp.name)
         except Exception as exc:
             raise HTTPException(status_code=422, detail=f"Could not process audio: {exc}") from exc
 
     return {
-        "predictions": [{"genre": genre, "probability": probability} for genre, probability in predictions]
+        "predictions": [
+            {"genre": genre, "probability": probability} for genre, probability in result["predictions"]
+        ],
+        "spectrogram_png": result["spectrogram_png"],
     }
 
 

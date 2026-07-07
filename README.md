@@ -150,7 +150,7 @@ Sprint 2 moved the project from initial EDA into preprocessing, modeling setup, 
 
 ### Shared code — `code/common.py`
 
-`2_transform.ipynb`, `3_model.ipynb`, and `4_predict.ipynb` share the same preprocessing helpers (`load_split`, `pad_or_truncate`, `audio_to_mel_spectrogram`, augmentation functions), the `AudioDataset` class, and the `AudioCNN` model — all defined once in `code/common.py` and imported by each notebook, instead of being copy-pasted three times. It must stay in `code/`, alongside the notebooks that import it. **See the checklist at the bottom of `code/common.py`** for what to do after pulling changes to it (kernel restarts, run order, etc.).
+`2_transform.ipynb`, `3_model.ipynb`, and `4_predict.ipynb` share the same preprocessing helpers (`load_split`, `pad_or_truncate`, `audio_to_mel_spectrogram`, augmentation functions), DB/DataLoader builders (`build_engine`, `load_label_mapping`, `build_dataloader`), the `AudioDataset` class, and the `AudioCNN` model — all defined once in `code/common.py` and imported by each notebook, instead of being copy-pasted three times. It must stay in `code/`, alongside the notebooks that import it. **See the checklist at the bottom of `code/common.py`** for what to do after pulling changes to it (kernel restarts, run order, etc.).
 
 ### `1_explore.ipynb` — EDA (complete)
 

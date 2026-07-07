@@ -205,3 +205,19 @@ Evaluates the trained model on the held-out test split:
 - Identifies the strongest/weakest genres by F1 and the largest confusion pairs
 - Interprets the training loss curves using the history stored in the checkpoint
 - Writes a final evaluation summary to `docs/eval_results.md` (a standalone file — the notebook does not rewrite its own `.ipynb` during execution)
+
+## Demo app
+
+A small local web app for trying the trained model interactively: upload a song, get back the predicted genre with a probability breakdown across all 10 classes.
+
+- `app/main.py` — FastAPI backend. `POST /predict` accepts an uploaded `.wav`/`.mp3`/`.flac`/`.ogg`/`.m4a` file and returns genre probabilities as JSON. Serves the frontend at `/`.
+- `app/inference.py` — loads `models/best_model.pth` once at startup and runs the same preprocessing pipeline (`code/common.py`'s `audio_to_mel_spectrogram`, `pad_or_truncate`, `AudioCNN`) used by `4_predict.ipynb`.
+- `app/static/index.html` — single-page upload UI with a probability bar chart, no build step.
+
+**Prerequisite:** `models/best_model.pth` must exist (run `3_model.ipynb` first).
+
+**Run it:**
+```bash
+uvicorn app.main:app --reload
+```
+Then open http://localhost:8000.

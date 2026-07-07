@@ -1,10 +1,10 @@
 # Evaluation Results
 
-**Overall test accuracy:** 0.3400 (34.00%).
+**Overall test accuracy:** 0.3000 (30.00%).
 
-**Where the model performs well:** The strongest genres by F1 score are metal (F1=0.537), pop (F1=0.519), hiphop (F1=0.462). These classes likely have more distinctive spectrogram patterns or fewer overlaps with neighboring genres in the test split.
+**Where the model performs well:** The strongest genres by F1 score are metal (F1=0.537), pop (F1=0.480), blues (F1=0.320). These classes likely have more distinctive spectrogram patterns or fewer overlaps with neighboring genres in the test split.
 
-**Where the model struggles:** The weakest genres by F1 score are reggae (F1=0.111), rock (F1=0.133), country (F1=0.148). The largest confusion pairs are: true reggae predicted as disco (11); true rock predicted as metal (9); true pop predicted as disco (8).
+**Where the model struggles:** The weakest genres by F1 score are classical (F1=0.000), rock (F1=0.129), country (F1=0.148). The largest confusion pairs are: true reggae predicted as disco (11); true rock predicted as metal (9); true disco predicted as metal (8).
 
 **Possible reasons why:** Genre boundaries are subjective, and several GTZAN styles share instrumentation, tempo ranges, and production characteristics. Misclassifications are most likely when songs from different genres produce similar mel-spectrogram textures.
 

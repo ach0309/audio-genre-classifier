@@ -1,3 +1,17 @@
+"""Shared helpers/models for the 2_transform / 3_model / 4_predict notebooks.
+
+!! DO NOT MOVE THIS FILE OUT OF code/ !!
+2_transform.ipynb, 3_model.ipynb, and 4_predict.ipynb all import this module
+as a plain sibling file (`from common import ...`) via a `sys.path` entry for
+their own directory. Moving common.py anywhere else will break every one of
+those imports on the next kernel restart.
+
+This is a plain module, not a notebook — it has no kernel state of its own, so
+each notebook can still be independently "restart kernel, run top to bottom":
+they just import a static file from disk, the same as any other dependency
+(e.g. librosa).
+"""
+
 from __future__ import annotations
 
 import os
@@ -7,6 +21,7 @@ import librosa
 import numpy as np
 import pandas as pd
 import torch
+import torch.nn as nn
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
 from torch.utils.data import DataLoader, Dataset
@@ -170,3 +185,84 @@ def build_dataloader(
     split_df = load_split(split_name, engine, repo_root)
     dataset = AudioDataset(split_df, label_to_idx=label_to_idx, augment=augment)
     return DataLoader(dataset, batch_size=batch_size, shuffle=shuffle)
+
+
+class AudioCNN(nn.Module):
+    """3-block CNN for mel spectrogram genre classification."""
+
+    def __init__(self, num_classes: int = 10):
+        super().__init__()
+
+        self.block1 = nn.Sequential(
+            nn.Conv2d(1, 32, kernel_size=3, padding=1),
+            nn.BatchNorm2d(32),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+        )
+
+        self.block2 = nn.Sequential(
+            nn.Conv2d(32, 64, kernel_size=3, padding=1),
+            nn.BatchNorm2d(64),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+        )
+
+        self.block3 = nn.Sequential(
+            nn.Conv2d(64, 128, kernel_size=3, padding=1),
+            nn.BatchNorm2d(128),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+        )
+
+        # Reduces [128, 16, 161] -> [128, 4, 4] regardless of input time-axis length.
+        self.adaptive_pool = nn.AdaptiveAvgPool2d((4, 4))
+
+        self.classifier = nn.Sequential(
+            nn.Flatten(),
+            nn.Linear(128 * 4 * 4, 256),
+            nn.ReLU(),
+            nn.Dropout(0.5),
+            nn.Linear(256, num_classes),
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = self.block1(x)
+        x = self.block2(x)
+        x = self.block3(x)
+        x = self.adaptive_pool(x)
+        x = self.classifier(x)
+        return x
+
+
+# -----------------------------------------------------------------------------
+# Teammate checklist — what you need to do to make sure everything still runs
+# -----------------------------------------------------------------------------
+# This file is imported by 2_transform.ipynb, 3_model.ipynb, and 4_predict.ipynb
+# (see the "!! DO NOT MOVE !!" note at the top). If you're pulling this change
+# for the first time:
+#
+# 1. Pull this branch so you get common.py *and* the updated notebooks
+#    together. Grabbing only the .ipynb files without this file will break
+#    their imports.
+#
+# 2. No new dependencies to install — this module only uses libraries the
+#    notebooks already imported (librosa, torch, pandas, numpy, sqlalchemy,
+#    python-dotenv).
+#
+# 3. Restart your kernel before running any of the three notebooks if you had
+#    one open from before this change — an old kernel won't know about the
+#    new common.py import.
+#
+# 4. Run the notebooks in this order, since 4_predict.ipynb now depends on a
+#    checkpoint that only 3_model.ipynb produces:
+#      2_transform.ipynb -> 3_model.ipynb (writes models/best_model.pth,
+#      takes a few minutes to train) -> 4_predict.ipynb (fails fast with a
+#      clear error if step 2 hasn't been run yet, same as before).
+#
+# 5. Same environment requirements as always — a running local Postgres with
+#    the audio_genre_classifier DB populated, and a .env with DB credentials
+#    (build_engine() reads DB_USER / DB_PASSWORD from it). This refactor
+#    doesn't change any of that.
+#
+# 6. Keep common.py in code/, next to the notebooks — don't move it. The
+#    import relies on it being a sibling file in the same folder.

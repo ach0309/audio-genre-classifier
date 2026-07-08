@@ -1,207 +1,191 @@
 # Audio Genre Classifier
 
-A machine learning pipeline that classifies music into 10 genres using the [GTZAN dataset](https://www.kaggle.com/datasets/andradaolteanu/gtzan-dataset-music-genre-classification). Built by team4ward.
+An end-to-end machine learning project that classifies music into 10 genres from raw audio. Built by **team4ward** using the [GTZAN dataset](https://www.kaggle.com/datasets/andradaolteanu/gtzan-dataset-music-genre-classification), PostgreSQL, librosa, PyTorch, and scikit-learn.
+
+The core pipeline is complete: the project explores and validates the dataset, creates reproducible train/validation/test splits, transforms waveforms into log-mel spectrograms, trains a convolutional neural network, and evaluates the best checkpoint on a held-out test set. A user-facing demo is now in development.
+
+## Project overview
+
+Music genre classification sits at an interesting intersection of signal processing and machine learning. A genre is not a single measurable feature: it emerges from rhythm, instrumentation, timbre, production, and cultural context. Our goal was to build a reproducible pipeline that learns useful patterns from audio while remaining honest about the ambiguity of the task and the limitations of a small benchmark dataset.
+
+The completed workflow is:
+
+```text
+GTZAN audio
+    ↓
+data validation and exploratory analysis
+    ↓
+reproducible PostgreSQL split assignments
+    ↓
+fixed-length waveforms and log-mel spectrograms
+    ↓
+training-only augmentation
+    ↓
+three-block convolutional neural network
+    ↓
+validation, checkpoint selection, and early stopping
+    ↓
+held-out test evaluation and single-file inference
+```
+
+## Results
+
+The final model reached **34.67% best validation accuracy** and **30.00% test accuracy** across 10 classes. This is above the 10% random-choice baseline, but it also shows that the current CNN is an early baseline rather than a production-ready genre classifier.
+
+| Test-set finding | Result |
+|---|---|
+| Overall accuracy | 30.00% |
+| Strongest F1 scores | metal: 0.537, pop: 0.480, blues: 0.320 |
+| Weakest F1 scores | classical: 0.000, rock: 0.129, country: 0.148 |
+| Largest confusion | reggae predicted as disco: 11 samples |
+
+Training stopped after four epochs when validation accuracy did not improve for three consecutive epochs. Training loss continued to fall while validation loss rose after the first epoch, indicating limited generalization. Likely contributors include the small dataset, overlapping genre characteristics, GTZAN's known quality issues, and limited hyperparameter tuning.
+
+These results are useful in their own right: the project demonstrates a complete, leakage-aware evaluation process and gives the team a concrete baseline for future experimentation. See the full [evaluation summary](docs/eval_results.md), [training curves](docs/images/training_curves.png), and [confusion matrix](docs/images/confusion_matrix.png).
+
+## What we built
+
+### Data exploration and quality checks
+
+The exploratory notebook examines class balance, clip duration, sample rate, waveforms, mel spectrograms, and MFCCs. It confirmed that the dataset is balanced at 100 songs per genre and identified `jazz.00054.wav` as corrupt. The file remains represented in the database for traceability but is excluded from all modeling.
+
+The analysis also found that `features_3_sec.csv` contains 9,990 rows rather than 10,000 because 10 shorter songs produce only nine complete segments. To prevent leakage between closely related excerpts, all splits are assigned at the parent-song level.
+
+### Reproducible data management
+
+PostgreSQL acts as the source of truth for labels, file paths, data-quality flags, and split membership. `db/populate.py` scans the local audio collection and applies a fixed random seed to create a reproducible 70/15/15 train/validation/test split. The preprocessing and evaluation notebooks query those assignments instead of creating their own splits.
+
+The schema and relationship are documented in the [database ERD](docs/erd.md).
+
+### Audio preprocessing
+
+Each audio file is loaded at 22,050 Hz, padded or truncated to a consistent length, and converted into a 128-band log-mel spectrogram. The resulting model input has shape `[batch, 1, 128, 1292]`.
+
+Augmentation is restricted to the training split and includes gain adjustment, time shifting, additive noise, and frequency masking. Validation and test samples remain unchanged so their metrics are comparable and repeatable.
+
+### CNN training
+
+`AudioCNN` treats each spectrogram as a single-channel image. Its architecture contains:
+
+- Three `Conv2d → BatchNorm2d → ReLU → MaxPool2d` blocks with 32, 64, and 128 channels
+- Adaptive average pooling to a fixed `4 × 4` representation
+- A 256-unit fully connected layer with 50% dropout
+- A 10-logit output layer, one value per genre
+
+The model trains with cross-entropy loss and Adam at a learning rate of `1e-3`. Training runs for up to 10 epochs with early stopping after three epochs without improved validation accuracy. The strongest checkpoint stores the model weights, label mappings, validation score, and training history.
+
+### Evaluation and inference
+
+The final notebook loads the saved checkpoint and evaluates it only on the held-out test split. It reports accuracy, per-genre precision/recall/F1, a confusion matrix, strongest and weakest genres, and the most common confusion pairs. It also contains the inference path used to turn an audio sample into a predicted genre label.
 
 ## Project structure
 
-```
+```text
 audio-genre-classifier/
 ├── code/
-│   ├── 1_explore.ipynb     # EDA
-│   ├── 2_transform.ipynb   # Preprocessing & feature engineering
-│   ├── 3_model.ipynb       # Model training & evaluation 
-│   ├── 4_predict.ipynb     
-│   └── common.py           # Shared helpers/model used by the 3 notebooks above — see setup notes at the bottom of the file
+│   ├── 1_explore.ipynb       # Dataset exploration and integrity checks
+│   ├── 2_transform.ipynb     # Preprocessing, augmentation, and DataLoaders
+│   ├── 3_model.ipynb         # CNN training, validation, and checkpointing
+│   ├── 4_predict.ipynb       # Held-out evaluation and inference
+│   └── common.py             # Shared preprocessing, dataset, DB, and model code
 ├── data/
-│   ├── genres_original/    # Raw .wav files (not committed, see setup below)
-│   ├── features_30_sec.csv # Pre-extracted features, 1 row per song
-│   └── features_3_sec.csv  # Pre-extracted features, 10 x 3-second clips per song
+│   ├── genres_original/      # Raw GTZAN audio (downloaded locally; not committed)
+│   ├── features_30_sec.csv   # One pre-extracted feature row per song
+│   └── features_3_sec.csv    # Pre-extracted features for three-second segments
 ├── db/
-│   ├── schema.sql          # CREATE TABLE for labels + audio_clips, view vw_split_summary
-│   ├── populate.py         # Scans genres_original/, assigns splits, inserts into DB
-│   └── queries.sql         # SELECT queries for each split (JOIN labels, filter flags)
-└── docs/
-    ├── requirements.txt
-    ├── GTZAN and Prior Music Classification Research.md
-    ├── audio_feature_research.md
-    ├── postgres_primer.md  # PostgreSQL intro for new contributors
-    └── images/             # Plots generated by 1_explore.ipynb
-        ├── genre_distribution.png
-        ├── waveforms.png
-        ├── spectrograms.png
-        ├── duration_distribution.png
-        └── mfcc_examples_by_genre.png
-```
-
-## How to run
-
-Follow these steps in order the first time you set up the project.
-
-**1. Clone the repo and create your branch:**
-```bash
-git clone git@github.com:ach0309/audio-genre-classifier.git
-cd audio-genre-classifier
-git checkout -b <first-name>-<what-youre-working-on>
-```
-
-**2. Install dependencies:**
-```bash
-pip install -r docs/requirements.txt
-```
-
-**3. Download the dataset:**
-
-Download GTZAN from [Kaggle](https://www.kaggle.com/datasets/andradaolteanu/gtzan-dataset-music-genre-classification) and place the `genres_original/` folder inside `data/` so the path looks like:
-```
-data/
-└── genres_original/
-    ├── blues/
-    ├── classical/
-    └── ...
-```
-
-**4. Set up the database** (see [docs/postgres_primer.md](docs/postgres_primer.md) if you are new to PostgreSQL):
-```bash
-createdb audio_genre_classifier
-psql audio_genre_classifier < db/schema.sql
-cp .env.example .env          # then open .env and set DB_USER to your Mac username
-python db/populate.py
-```
-
-**5. Run the notebooks in order:**
-
-| Notebook | What it does | Prerequisites |
-|---|---|---|
-| `1_explore.ipynb` | EDA — understand the dataset | dataset downloaded |
-| `2_transform.ipynb` | Preprocessing — builds DataLoaders | database populated |
-| `3_model.ipynb` | Model training | `2_transform.ipynb` run |
-| `4_predict.ipynb` | Inference | trained model |
-
----
-
-## Database setup
-
-> New to PostgreSQL? Read [docs/postgres_primer.md](docs/postgres_primer.md) first.
-
-Each team member runs their own local database. Because `populate.py` uses a fixed random seed, everyone gets identical splits.
-
-**Prerequisites:** PostgreSQL 14+ installed and running locally.
-
-**Steps:**
-
-```bash
-# 1. Create the database
-createdb audio_genre_classifier
-
-# 2. Create the tables
-psql audio_genre_classifier < db/schema.sql
-
-# 3. Copy .env.example and fill in your details
-cp .env.example .env
-
-# 4. Populate splits (requires data/genres_original/)
-python db/populate.py
-
-# 5. Verify
-psql audio_genre_classifier < db/queries.sql
-```
-
-Expected output from step 5 (usable songs only — `jazz.00054.wav` is in the DB but filtered):
-```
- split | total_files
--------+-------------
- test  |  ~150
- train |  ~700
- val   |  ~150
+│   ├── schema.sql            # Tables, indexes, constraints, and summary view
+│   ├── populate.py           # File scan and reproducible split population
+│   └── queries.sql           # Split and verification queries
+├── docs/
+│   ├── eval_results.md       # Final model evaluation summary
+│   ├── erd.md                # Database design and relationship documentation
+│   ├── postgres_primer.md    # PostgreSQL guide for new contributors
+│   ├── requirements.txt      # Python dependencies
+│   ├── *research.md          # Dataset and audio-feature research
+│   └── images/               # EDA, training, evaluation, and ERD figures
+└── models/
+    └── best_model.pth        # Generated locally by 3_model.ipynb; not committed
 ```
 
 ## Dataset
 
-GTZAN is a benchmark dataset for music genre classification collected by George Tzanetakis (2002).
+[GTZAN](http://marsyas.info/downloads/datasets.html) is a widely used music information retrieval benchmark introduced by George Tzanetakis and Perry Cook. This project uses the Kaggle distribution linked above.
 
 | Property | Value |
 |---|---|
-| Genres | 10 (blues, classical, country, disco, hiphop, jazz, metal, pop, reggae, rock) |
-| Songs per genre | 100 |
-| Total songs | 1,000 |
-| Clip length | ~30 seconds |
-| Sample rate | 22,050 Hz |
-| Format | `.wav` (mono) |
-| Known issues | `jazz.00054.wav` is corrupt and excluded from training |
+| Genres | blues, classical, country, disco, hiphop, jazz, metal, pop, reggae, rock |
+| Songs | 1,000 total; 100 per genre |
+| Duration | approximately 30 seconds per song |
+| Audio | mono `.wav`, 22,050 Hz |
+| Usable files | 999 |
+| Excluded file | `jazz.00054.wav` (corrupt) |
 
-The dataset is downloadable from this [Kaggle link](https://www.kaggle.com/datasets/andradaolteanu/gtzan-dataset-music-genre-classification/code) and is available in three forms in this project:
+GTZAN is useful for benchmarking, but it is not a clean representation of the full musical world. Published research has identified repetitions, mislabels, distortions, and artist repetition in the dataset. Genre labels themselves are subjective and often overlap. We therefore treat the final metrics as a baseline and avoid presenting the model as a definitive judge of genre.
 
-- **Raw audio** — 1,000 `.wav` files in `data/genres_original/`. Not committed to the repo; download from Kaggle and place manually (see Setup above).
-- **CSV features** — Pre-extracted features committed to the repo. `features_30_sec.csv` has one row per song; `features_3_sec.csv` splits each song into 10 three-second clips (9,990 rows total). No raw audio needed to use these.
-- **Images** — EDA plots (waveforms, spectrograms, MFCCs, class distribution) saved to `docs/images/` and committed to the repo.
+## Run the project
 
-## Sprint 2 progress
+### 1. Clone and install
 
-Sprint 2 moved the project from initial EDA into preprocessing, modeling setup, and database integration:
+```bash
+git clone git@github.com:ach0309/audio-genre-classifier.git
+cd audio-genre-classifier
+python -m pip install -r docs/requirements.txt
+```
 
-- Completed GTZAN dataset research covering benchmark value, prior music classification work, and known dataset limitations such as mislabels, repetitions, distortions, and artist repetition. (continued work from Sprint 1)
-- Added audio feature research explaining waveforms, sample rate, spectrograms, MFCCs, and how `librosa` supports feature extraction. (continued work from Sprint 1)
-- Built the preprocessing pipeline in `2_transform.ipynb` — connects to PostgreSQL for authoritative split assignments, loads audio clips, normalizes clip length, converts audio to mel spectrograms, encodes labels, and prepares PyTorch-ready tensors.
-- Added `AudioDataset` and train/validation/test `DataLoader` scaffolding so the modeling notebook can consume batches directly.
-- Added a verification cell confirming batch shape, tensor dtype, label dtype, and finite feature values before model training.
-- Added PostgreSQL schema (`db/schema.sql`), migration scripts, and `db/populate.py` to assign reproducible train/val/test splits at the parent-song level using a fixed random seed.
+PostgreSQL 14+ must also be installed and running locally.
 
-## Notebooks
+### 2. Download GTZAN
 
-### Shared code — `code/common.py`
+Download the dataset from [Kaggle](https://www.kaggle.com/datasets/andradaolteanu/gtzan-dataset-music-genre-classification) and place `genres_original/` inside `data/`:
 
-`2_transform.ipynb`, `3_model.ipynb`, and `4_predict.ipynb` share the same preprocessing helpers (`load_split`, `pad_or_truncate`, `audio_to_mel_spectrogram`, augmentation functions), DB/DataLoader builders (`build_engine`, `load_label_mapping`, `build_dataloader`), the `AudioDataset` class, and the `AudioCNN` model — all defined once in `code/common.py` and imported by each notebook, instead of being copy-pasted three times. It must stay in `code/`, alongside the notebooks that import it. **See the checklist at the bottom of `code/common.py`** for what to do after pulling changes to it (kernel restarts, run order, etc.).
+```text
+data/genres_original/
+├── blues/
+├── classical/
+├── country/
+└── ...
+```
 
-### `1_explore.ipynb` — EDA (complete)
+### 3. Configure PostgreSQL
 
-Covers the full GTZAN dataset from multiple angles:
+```bash
+createdb audio_genre_classifier
+psql audio_genre_classifier < db/schema.sql
+cp .env.example .env
+```
 
-- **Class distribution** — 100 songs per genre, perfectly balanced
-- **Waveforms** — amplitude over time for one clip per genre
-- **Mel spectrograms** — frequency × time visualizations
-- **MFCCs** — compressed spectral features (mean/variance per clip)
-- **Audio duration** — 35 distinct clip lengths; majority at 30.013 s
-- **Sample rate** — all 999 loadable files are 22,050 Hz
-- **Integrity check** — `jazz.00054.wav` is corrupt and must be excluded
+Set `DB_USER` in `.env` to your PostgreSQL username, then populate and verify the database:
 
-Key findings relevant to preprocessing:
-- `features_3_sec.csv` has **9,990 rows** (not 10,000) — 10 short songs produced 9 clips instead of 10
-- Splits must be done at the **parent-song level** to avoid data leakage
-- Drop `jazz.00054` before splitting
+```bash
+python db/populate.py
+psql audio_genre_classifier < db/queries.sql
+```
 
-### `2_transform.ipynb` — Preprocessing (complete)
+See the [PostgreSQL primer](docs/postgres_primer.md) for additional guidance.
 
-Builds the full audio preprocessing path for model training:
+### 4. Run the notebooks
 
-- Connects to PostgreSQL, queries `audio_clips` JOIN `labels` for authoritative train/val/test split assignments, filtered by `is_corrupted = FALSE` and `is_duplicate = FALSE`
-- Verifies data quality: zero nulls, zero duplicates, corrupt file confirmed absent from training data
-- Encodes genre labels into integer class IDs for PyTorch classification
-- Loads audio with `librosa` at a fixed sample rate
-- Pads or truncates clips to a fixed number of samples so batches have consistent shapes
-- Converts waveforms into mel spectrogram tensors
-- Applies augmentation only to training examples (waveform: gain, time shift, noise; spectrogram: frequency masking)
-- Creates train, validation, and test `DataLoader` objects
-- Verifies that a training batch has shape `torch.Size([16, 1, 128, 1292])`, uses `float32` features, uses `int64` labels, and contains only finite feature values
+Run the notebooks in numerical order. Restart the Jupyter kernel before running them if `code/common.py` has changed.
 
-### `3_model.ipynb` — Model training (complete)
+| Notebook | Purpose | Produces |
+|---|---|---|
+| `1_explore.ipynb` | Explore and validate GTZAN | EDA figures in `docs/images/` |
+| `2_transform.ipynb` | Build the preprocessing and DataLoader pipeline | Verified train/val/test batches |
+| `3_model.ipynb` | Train and select the CNN | `models/best_model.pth`, training curves |
+| `4_predict.ipynb` | Evaluate and run inference | Metrics, confusion matrix, evaluation summary |
 
-Defines and trains the CNN used to classify genres from mel spectrograms:
+`common.py` must remain beside the notebooks because the final three notebooks import it directly.
 
-- Re-instantiates the train/val/test `DataLoader`s using `code/common.py`
-- Imports `AudioCNN` (three Conv2d → BatchNorm2d → ReLU → MaxPool2d blocks, adaptive average pooling, and a fully-connected classifier head with dropout) from `code/common.py`
-- Verifies the forward pass produces the expected `[batch, 10]` output shape
-- Trains with `CrossEntropyLoss` and `Adam(lr=1e-3)` for up to 10 epochs, with early stopping after 3 epochs without a validation-accuracy improvement
-- Saves the best checkpoint (by validation accuracy) to `models/best_model.pth` as a dict containing `model_state_dict`, `label_to_idx`, `idx_to_label`, and training history
-- Plots and saves training/validation loss and validation accuracy curves to `docs/images/training_curves.png`
+## Project status and next steps
 
-### `4_predict.ipynb` — Inference and evaluation (complete)
+The research, data pipeline, model training, and evaluation phases are complete. The team is currently building the demo that will expose the inference workflow through a simpler user experience.
 
-Evaluates the trained model on the held-out test split:
+With more time, the strongest technical next steps would be:
 
-- Loads `models/best_model.pth`, requiring the canonical checkpoint dict schema (fails fast with a clear error on older formats)
-- Builds only the test `DataLoader` via `code/common.py` — no `%run` of another notebook, so it never touches train/val audio
-- Runs inference over the test set and reports overall test accuracy
-- Saves a confusion matrix to `docs/images/confusion_matrix.png` and prints a full classification report (precision/recall/F1 per genre)
-- Identifies the strongest/weakest genres by F1 and the largest confusion pairs
-- Interprets the training loss curves using the history stored in the checkpoint
-- Writes a final evaluation summary to `docs/eval_results.md` (a standalone file — the notebook does not rewrite its own `.ipynb` during execution)
+- Tune learning rate, regularization, batch size, and model capacity
+- Train on more diverse and carefully curated audio
+- Compare the CNN with transfer learning from a pretrained audio model
+- Use stratified, artist-aware splitting where metadata permits
+- Add confidence scores and clearer uncertainty handling to the demo
+
+The project’s main outcome is not only a predicted label. It is a complete, reproducible path from imperfect raw audio to an honestly evaluated machine learning system—and a clear foundation for the demo and future model improvements.

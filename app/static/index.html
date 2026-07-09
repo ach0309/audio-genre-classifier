@@ -31,7 +31,7 @@
 
   body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    max-width: 640px;
+    max-width: 800px;
     margin: 0 auto;
     padding: 3rem 1.5rem 4rem;
     min-height: 100vh;
@@ -108,7 +108,7 @@
     border-radius: 10px;
     padding: 0.9rem;
     text-align: center;
-    cursor: pointer;
+    cursor: default;
     color: var(--text-muted);
     font-size: 0.76rem;
     transition: border-color 0.15s, background 0.15s;
@@ -272,9 +272,8 @@
         <audio id="player" controls hidden></audio>
 
         <div class="dz" id="dropzone">
-          <div>Drop a track here, or click a sample above</div>
+          <div>Drag a track here</div>
           <div id="filename">No file selected</div>
-          <input type="file" id="fileInput" accept=".wav,.mp3,.flac,.ogg,.m4a" />
         </div>
 
         <button class="btn" id="submitBtn" disabled>Guess the Genre</button>
@@ -350,7 +349,6 @@
     const stageReveal = document.getElementById("stageReveal");
 
     const dropzone = document.getElementById("dropzone");
-    const fileInput = document.getElementById("fileInput");
     const filenameEl = document.getElementById("filename");
     const submitBtn = document.getElementById("submitBtn");
     const player = document.getElementById("player");
@@ -395,9 +393,7 @@
       }
     }
 
-    // --- Upload / drag-drop ---
-    dropzone.addEventListener("click", () => fileInput.click());
-
+    // --- Drag-and-drop only (no click-to-browse) ---
     dropzone.addEventListener("dragover", (e) => {
       e.preventDefault();
       dropzone.classList.add("dragover");
@@ -408,13 +404,6 @@
       dropzone.classList.remove("dragover");
       if (e.dataTransfer.files.length) {
         const file = e.dataTransfer.files[0];
-        setFile(file, URL.createObjectURL(file));
-      }
-    });
-
-    fileInput.addEventListener("change", () => {
-      if (fileInput.files.length) {
-        const file = fileInput.files[0];
         setFile(file, URL.createObjectURL(file));
       }
     });
@@ -434,6 +423,14 @@
     });
 
     againBtn.addEventListener("click", () => {
+      player2.pause();
+      selectedFile = null;
+      selectedFileUrl = null;
+      filenameEl.textContent = "No file selected";
+      submitBtn.disabled = true;
+      player.hidden = true;
+      player.removeAttribute("src");
+
       stageReveal.hidden = true;
       stageIdle.hidden = false;
     });
@@ -532,6 +529,10 @@
 
       stageLoading.hidden = true;
       stageReveal.hidden = false;
+
+      // Best-effort autoplay once the reveal appears; browsers may still
+      // block it depending on autoplay policy, so this fails silently.
+      player2.play().catch(() => {});
     }
   </script>
 </body>

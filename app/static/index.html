@@ -3,22 +3,28 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Audio Genre Classifier</title>
+<title>Genre Guesser</title>
 <style>
   :root {
     color-scheme: dark;
     --bg-base: #06070c;
     --bg-base-2: #0b0e1a;
+    --panel-bg: #100e1c;
     --accent-purple: #a855f7;
     --accent-purple-hover: #c084fc;
     --accent-pink: #ec4899;
     --accent-cyan: #22d3ee;
     --text-primary: #f5f3ff;
     --text-secondary: rgba(245, 243, 255, 0.65);
-    --text-muted: rgba(245, 243, 255, 0.45);
+    --text-muted: rgba(245, 243, 255, 0.42);
     --glass-bg: rgba(20, 18, 36, 0.55);
     --glass-border: rgba(255, 255, 255, 0.12);
     --error: #f87171;
+    --mono: ui-monospace, "SF Mono", Menlo, monospace;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
   }
 
   * { box-sizing: border-box; }
@@ -39,80 +45,101 @@
     background-attachment: fixed;
   }
 
-  h1 {
-    font-size: 1.75rem;
-    margin-bottom: 0.25rem;
-    background: linear-gradient(135deg, #f5f3ff 0%, #d8b4fe 100%);
+  /* --- Wordmark --- */
+  .wordmark {
+    font-weight: 800;
+    letter-spacing: -0.01em;
+    background: linear-gradient(135deg, var(--accent-purple) 0%, var(--accent-pink) 55%, var(--accent-cyan) 100%);
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
+    filter: drop-shadow(0 0 22px rgba(236, 72, 153, 0.22));
   }
-  p.subtitle { color: var(--text-secondary); margin-top: 0; }
+  .wordmark .dot { color: var(--accent-cyan); -webkit-text-fill-color: var(--accent-cyan); filter: none; }
 
-  .glass-panel {
-    background: var(--glass-bg);
-    backdrop-filter: blur(20px) saturate(140%);
-    -webkit-backdrop-filter: blur(20px) saturate(140%);
+  .device {
+    background: var(--panel-bg);
     border: 1px solid var(--glass-border);
     border-radius: 20px;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.08);
     padding: 1.75rem;
-    margin-top: 1.5rem;
   }
 
-  .sample-chips { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+  .stage[hidden] { display: none; }
+
+  /* --- IDLE STAGE --- */
+  .idle-screen { text-align: center; padding: 0.5rem; }
+  .idle-screen .wordmark { font-size: 2.1rem; display: block; }
+  .idle-tagline { color: var(--text-secondary); font-size: 0.83rem; margin: 0.45rem 0 1.4rem; }
+
+  .glass {
+    background: var(--glass-bg);
+    backdrop-filter: blur(20px) saturate(140%);
+    -webkit-backdrop-filter: blur(20px) saturate(140%);
+    border: 1px solid var(--glass-border);
+    border-radius: 14px;
+    padding: 1.1rem;
+    text-align: left;
+  }
+
+  .chip-row { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.8rem; }
   .chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.4rem;
-    padding: 0.45rem 0.9rem;
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    padding: 0.35rem 0.7rem;
     border-radius: 999px;
     background: rgba(255, 255, 255, 0.06);
     border: 1px solid rgba(255, 255, 255, 0.14);
-    color: var(--text-primary);
-    font-size: 0.85rem;
+    color: var(--text-secondary);
     cursor: pointer;
     transition: background 0.15s, border-color 0.15s;
   }
   .chip:hover { background: rgba(168, 85, 247, 0.18); border-color: var(--accent-purple); }
   .chip:disabled { opacity: 0.5; cursor: not-allowed; }
 
-  .divider {
-    color: var(--text-muted);
-    font-size: 0.8rem;
-    text-align: center;
-    margin: 1rem 0;
-  }
-
-  .dropzone {
-    border: 2px dashed rgba(168, 85, 247, 0.45);
-    border-radius: 14px;
-    padding: 1.75rem;
-    text-align: center;
-    cursor: pointer;
-    transition: border-color 0.15s, background 0.15s;
-  }
-  .dropzone.dragover { border-color: var(--accent-purple-hover); background: rgba(168, 85, 247, 0.12); }
-  .dropzone input { display: none; }
-  #filename { margin-top: 0.6rem; font-size: 0.85rem; color: var(--text-secondary); }
-
-  audio { width: 100%; margin-top: 1rem; }
-
-  button#submitBtn {
-    margin-top: 1.25rem;
+  .fake-player,
+  audio#player {
     width: 100%;
-    padding: 0.75rem;
-    font-size: 1rem;
-    font-weight: 600;
-    border: none;
-    border-radius: 10px;
-    background: linear-gradient(135deg, #a855f7 0%, #ec4899 50%, #22d3ee 100%);
-    color: #0b0e1a;
-    cursor: pointer;
+    margin-bottom: 0.9rem;
   }
-  button#submitBtn:disabled { background: rgba(168, 85, 247, 0.25); color: var(--text-muted); cursor: not-allowed; }
 
-  #status { color: var(--accent-cyan); margin-top: 1rem; display: none; font-size: 0.9rem; }
+  .dz {
+    border: 1.5px dashed rgba(168, 85, 247, 0.4);
+    border-radius: 10px;
+    padding: 0.9rem;
+    text-align: center;
+    cursor: pointer;
+    color: var(--text-muted);
+    font-size: 0.76rem;
+    transition: border-color 0.15s, background 0.15s;
+    margin-bottom: 0.9rem;
+  }
+  .dz.dragover { border-color: var(--accent-purple-hover); background: rgba(168, 85, 247, 0.12); }
+  .dz input { display: none; }
+  #filename { margin-top: 0.5rem; font-size: 0.8rem; color: var(--text-secondary); }
+
+  .btn {
+    display: block;
+    width: 100%;
+    text-align: center;
+    padding: 0.65rem;
+    border-radius: 9px;
+    font-weight: 700;
+    font-size: 0.85rem;
+    letter-spacing: 0.01em;
+    background: linear-gradient(135deg, #a855f7 0%, #ec4899 50%, #22d3ee 100%);
+    color: var(--bg-base);
+    border: none;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .btn:disabled { background: rgba(168, 85, 247, 0.25); color: var(--text-muted); cursor: not-allowed; }
+  .btn.ghost {
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--text-primary);
+    border: 1px solid var(--glass-border);
+  }
+
   #error {
     color: var(--error);
     background: rgba(248, 113, 113, 0.1);
@@ -121,78 +148,165 @@
     padding: 0.6rem 0.9rem;
     margin-top: 1rem;
     display: none;
-    font-size: 0.9rem;
+    font-size: 0.85rem;
   }
 
-  #results { margin-top: 1.75rem; display: none; }
-  .framing { color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem; }
+  /* --- LOADING STAGE --- */
+  .loading-screen { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; min-height: 360px; }
+  .loading-screen .wordmark { font-size: 0.75rem; margin-bottom: 1.3rem; }
 
-  .hero {
-    text-align: center;
-    padding: 1.25rem 0;
+  .loading-spectro {
+    width: 100%;
+    max-width: 320px;
+    height: 70px;
+    border-radius: 8px;
+    border: 1px solid var(--glass-border);
+    background: repeating-linear-gradient(90deg, #1e0a3c 0%, #6d28d9 10%, #a855f7 22%, #ec4899 38%, #f97316 50%, #1e0a3c 62%, #7c3aed 78%, #22d3ee 90%, #1e0a3c 100%);
+    opacity: 0;
+    animation: fadeIn 0.5s ease forwards;
+    margin-bottom: 1.4rem;
   }
-  .hero-emoji { font-size: 2.5rem; display: block; }
-  .hero-genre {
-    font-size: 2.25rem;
-    font-weight: 700;
+  @keyframes fadeIn { to { opacity: 0.75; } }
+
+  .reel-window {
+    position: relative;
+    width: 200px;
+    height: 120px;
+    overflow: hidden;
+    border-radius: 8px;
+    border: 1px solid var(--glass-border);
+    background: rgba(255, 255, 255, 0.03);
+    mask-image: linear-gradient(180deg, transparent, black 33%, black 66%, transparent);
+    -webkit-mask-image: linear-gradient(180deg, transparent, black 33%, black 66%, transparent);
+    margin-bottom: 1rem;
+  }
+  .reel-window::after {
+    content: "";
+    position: absolute;
+    top: 40px; left: 0; right: 0; height: 40px;
+    border-top: 1px solid rgba(255, 255, 255, 0.14);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+    pointer-events: none;
+  }
+  .reel-track { display: flex; flex-direction: column; }
+  .reel-track div {
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    font-size: 0.85rem;
+    font-weight: 600;
     text-transform: capitalize;
-    background: linear-gradient(135deg, var(--accent-purple) 0%, var(--accent-pink) 50%, var(--accent-cyan) 100%);
+    color: var(--text-secondary);
+  }
+  .reel-track div.landing { font-weight: 800; color: var(--text-primary); }
+
+  .loading-caption {
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  /* --- REVEAL STAGE --- */
+  .reveal-screen { display: flex; flex-direction: column; align-items: center; text-align: center; }
+  .reveal-screen .wordmark { font-size: 0.75rem; margin-bottom: 1.3rem; }
+  .my-guess-label {
+    font-family: var(--mono);
+    font-size: 0.64rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 0.3rem;
+  }
+
+  .podium { display: flex; align-items: flex-end; justify-content: center; gap: 0.6rem; margin: 0.2rem 0 1.3rem; width: 100%; }
+  .podium-col { display: flex; flex-direction: column; align-items: center; width: 100px; }
+  .podium-col .p-emoji { font-size: 1.3rem; }
+  .podium-col.rank-1 .p-emoji { font-size: 2.1rem; filter: drop-shadow(0 0 18px rgba(236, 72, 153, 0.4)); }
+  .podium-col .p-genre { font-size: 0.72rem; text-transform: capitalize; color: var(--text-secondary); margin-top: 0.15rem; }
+  .podium-col.rank-1 .p-genre {
+    font-size: 1.05rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    background: linear-gradient(135deg, var(--accent-purple), var(--accent-pink), var(--accent-cyan));
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
-    filter: drop-shadow(0 0 18px rgba(236, 72, 153, 0.35));
   }
-  .hero-pct { font-size: 1.1rem; color: var(--text-secondary); }
+  .podium-col .p-pct { font-family: var(--mono); font-size: 0.66rem; color: var(--text-muted); margin-bottom: 0.5rem; }
+  .podium-col.rank-1 .p-pct { font-size: 0.78rem; color: var(--text-secondary); }
+  .podium-block { width: 100%; border-radius: 8px 8px 0 0; background: rgba(255, 255, 255, 0.06); border: 1px solid var(--glass-border); border-bottom: none; }
+  .podium-col.rank-1 .podium-block { height: 88px; background: linear-gradient(180deg, rgba(168, 85, 247, 0.35), rgba(168, 85, 247, 0.1)); border-color: rgba(168, 85, 247, 0.4); }
+  .podium-col.rank-2 .podium-block { height: 54px; }
+  .podium-col.rank-3 .podium-block { height: 40px; }
 
-  .runner-ups { margin-top: 1rem; }
-  .bar-row { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.5rem; }
-  .bar-label { width: 100px; font-size: 0.85rem; text-align: right; text-transform: capitalize; color: var(--text-secondary); }
-  .bar-track { flex: 1; background: rgba(255, 255, 255, 0.08); border-radius: 6px; overflow: hidden; height: 14px; }
-  .bar-fill { height: 100%; background: linear-gradient(90deg, #7c3aed, #22d3ee); transition: width 0.4s ease; }
-  .bar-pct { width: 44px; font-size: 0.8rem; color: var(--text-muted); }
+  .reveal-spectro-block { width: 100%; max-width: 320px; margin-bottom: 1rem; }
+  .spectro-label {
+    font-family: var(--mono);
+    font-size: 0.64rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 0.35rem;
+  }
+  .reveal-spectro { width: 100%; border-radius: 8px; border: 1px solid var(--glass-border); display: block; }
 
-  .spectrogram-section { margin-top: 1.75rem; text-align: center; }
-  .spectrogram-section h3 { font-size: 0.95rem; color: var(--text-secondary); font-weight: 600; margin-bottom: 0.5rem; }
-  .spectrogram-section img { max-width: 100%; border-radius: 10px; border: 1px solid var(--glass-border); }
-  .spectrogram-caption { font-size: 0.78rem; color: var(--text-muted); margin-top: 0.5rem; }
+  .reveal-screen audio#player2 { width: 100%; max-width: 320px; margin-bottom: 0.2rem; }
+  .reveal-screen .btn.ghost { max-width: 320px; margin-top: 1rem; }
 
   footer { margin-top: 2.5rem; color: var(--text-muted); font-size: 0.78rem; text-align: center; line-height: 1.5; }
 </style>
 </head>
 <body>
-  <h1>Audio Genre Classifier</h1>
-  <p class="subtitle">Upload a track (or try a sample) — here's the model's best guess.</p>
+  <div class="device">
+    <!-- IDLE -->
+    <div class="stage idle-screen" id="stageIdle">
+      <span class="wordmark">Genre Guesser<span class="dot">.</span></span>
+      <p class="idle-tagline">Upload a track. See what the model calls it.</p>
+      <div class="glass">
+        <div class="chip-row" id="sampleChips"></div>
 
-  <div class="glass-panel">
-    <div class="sample-chips" id="sampleChips"></div>
-    <div class="divider">or upload your own</div>
+        <audio id="player" controls hidden></audio>
 
-    <div class="dropzone" id="dropzone">
-      <div>Click to choose a file, or drag one here</div>
-      <div id="filename">No file selected</div>
-      <input type="file" id="fileInput" accept=".wav,.mp3,.flac,.ogg,.m4a" />
+        <div class="dz" id="dropzone">
+          <div>Drop a track here, or click a sample above</div>
+          <div id="filename">No file selected</div>
+          <input type="file" id="fileInput" accept=".wav,.mp3,.flac,.ogg,.m4a" />
+        </div>
+
+        <button class="btn" id="submitBtn" disabled>Guess the Genre</button>
+        <div id="error"></div>
+      </div>
     </div>
 
-    <audio id="player" controls hidden></audio>
+    <!-- LOADING -->
+    <div class="stage loading-screen" id="stageLoading" hidden>
+      <span class="wordmark">Genre Guesser</span>
+      <div class="loading-spectro" id="loadingSpectro"></div>
+      <div class="reel-window">
+        <div class="reel-track" id="reelTrack"></div>
+      </div>
+      <div class="loading-caption">guessing…</div>
+    </div>
 
-    <button id="submitBtn" disabled>Analyze Track</button>
-    <div id="status">Running inference...</div>
-    <div id="error"></div>
-  </div>
+    <!-- REVEAL -->
+    <div class="stage reveal-screen" id="stageReveal" hidden>
+      <span class="wordmark">Genre Guesser</span>
+      <div class="my-guess-label">My guess</div>
 
-  <div id="results">
-    <p class="framing">Best guess (right about 1 in 3 times on unseen tracks):</p>
+      <div class="podium" id="podium"></div>
 
-    <div class="hero" id="hero"></div>
-    <div class="runner-ups" id="runnerUps"></div>
+      <div class="reveal-spectro-block">
+        <div class="spectro-label">What the model heard</div>
+        <img class="reveal-spectro" id="spectrogram" alt="Mel spectrogram of the analyzed clip" />
+      </div>
 
-    <div class="spectrogram-section">
-      <h3>What the model sees</h3>
-      <img id="spectrogram" alt="Mel spectrogram of the analyzed clip" />
-      <p class="spectrogram-caption">
-        Log-mel spectrogram — frequency (low → high, bottom → top) over time.
-        This is the actual input the CNN classifies, not the raw waveform.
-      </p>
+      <audio id="player2" controls></audio>
+
+      <button class="btn ghost" id="againBtn">Guess Another</button>
     </div>
   </div>
 
@@ -204,63 +318,78 @@
 
   <script>
     const GENRE_META = {
-      blues:     { emoji: "🎷", color: "#3b82f6" },
-      classical: { emoji: "🎻", color: "#e5e7eb" },
-      country:   { emoji: "🤠", color: "#ca8a04" },
-      disco:     { emoji: "🕺", color: "#ec4899" },
-      hiphop:    { emoji: "🎤", color: "#f97316" },
-      jazz:      { emoji: "🎺", color: "#f59e0b" },
-      metal:     { emoji: "🤘", color: "#94a3b8" },
-      pop:       { emoji: "💫", color: "#38bdf8" },
-      reggae:    { emoji: "🌴", color: "#22c55e" },
-      rock:      { emoji: "🎸", color: "#ef4444" },
+      blues:     { emoji: "🎷" },
+      classical: { emoji: "🎻" },
+      country:   { emoji: "🤠" },
+      disco:     { emoji: "🕺" },
+      hiphop:    { emoji: "🎤" },
+      jazz:      { emoji: "🎺" },
+      metal:     { emoji: "🤘" },
+      pop:       { emoji: "💫" },
+      reggae:    { emoji: "🌴" },
+      rock:      { emoji: "🎸" },
     };
+    const GENRE_ORDER = Object.keys(GENRE_META);
 
+    // Displayed as "Song N" (not the genre name) so picking a sample doesn't
+    // spoil the answer before the guess even runs.
     const SAMPLE_TRACKS = [
-      { genre: "blues", file: "/samples/blues_sample.wav" },
-      { genre: "classical", file: "/samples/classical_sample.wav" },
-      { genre: "hiphop", file: "/samples/hiphop_sample.wav" },
-      { genre: "metal", file: "/samples/metal_sample.wav" },
-      { genre: "reggae", file: "/samples/reggae_sample.wav" },
+      { label: "Song 1", file: "/samples/blues_sample.wav" },
+      { label: "Song 2", file: "/samples/classical_sample.wav" },
+      { label: "Song 3", file: "/samples/hiphop_sample.wav" },
+      { label: "Song 4", file: "/samples/metal_sample.wav" },
+      { label: "Song 5", file: "/samples/reggae_sample.wav" },
     ];
+
+    const MIN_LOADING_MS = 2600;
+    const REEL_ROW_HEIGHT = 40;
+    const REEL_CYCLES = 2;
+
+    const stageIdle = document.getElementById("stageIdle");
+    const stageLoading = document.getElementById("stageLoading");
+    const stageReveal = document.getElementById("stageReveal");
 
     const dropzone = document.getElementById("dropzone");
     const fileInput = document.getElementById("fileInput");
     const filenameEl = document.getElementById("filename");
     const submitBtn = document.getElementById("submitBtn");
     const player = document.getElementById("player");
-    const resultsEl = document.getElementById("results");
-    const heroEl = document.getElementById("hero");
-    const runnerUpsEl = document.getElementById("runnerUps");
-    const spectrogramEl = document.getElementById("spectrogram");
+    const player2 = document.getElementById("player2");
     const errorEl = document.getElementById("error");
-    const statusEl = document.getElementById("status");
     const sampleChipsEl = document.getElementById("sampleChips");
+    const reelTrack = document.getElementById("reelTrack");
+    const loadingSpectro = document.getElementById("loadingSpectro");
+    const podiumEl = document.getElementById("podium");
+    const spectrogramEl = document.getElementById("spectrogram");
+    const againBtn = document.getElementById("againBtn");
 
     let selectedFile = null;
+    let selectedFileUrl = null;
+
+    function sleep(ms) {
+      return new Promise((resolve) => setTimeout(resolve, ms));
+    }
 
     // --- Sample chips ---
-    for (const { genre, file } of SAMPLE_TRACKS) {
-      const meta = GENRE_META[genre];
+    for (const { label, file } of SAMPLE_TRACKS) {
       const chip = document.createElement("button");
       chip.className = "chip";
       chip.type = "button";
-      chip.innerHTML = `${meta.emoji} ${genre}`;
-      chip.addEventListener("click", () => loadSample(genre, file, chip));
+      chip.textContent = `🎵 ${label}`;
+      chip.addEventListener("click", () => loadSample(file, chip));
       sampleChipsEl.appendChild(chip);
     }
 
-    async function loadSample(genre, url, chipEl) {
+    async function loadSample(url, chipEl) {
       const allChips = sampleChipsEl.querySelectorAll(".chip");
       allChips.forEach((c) => (c.disabled = true));
       try {
         const response = await fetch(url);
         const blob = await response.blob();
-        const file = new File([blob], `${genre}_sample.wav`, { type: blob.type || "audio/wav" });
-        setFile(file);
-        player.src = url;
-        player.hidden = false;
-        await runPrediction(file);
+        const filename = url.split("/").pop();
+        const file = new File([blob], filename, { type: blob.type || "audio/wav" });
+        setFile(file, url);
+        await runGuess(file);
       } finally {
         allChips.forEach((c) => (c.disabled = false));
       }
@@ -279,86 +408,130 @@
       dropzone.classList.remove("dragover");
       if (e.dataTransfer.files.length) {
         const file = e.dataTransfer.files[0];
-        setFile(file);
-        player.src = URL.createObjectURL(file);
-        player.hidden = false;
+        setFile(file, URL.createObjectURL(file));
       }
     });
 
     fileInput.addEventListener("change", () => {
       if (fileInput.files.length) {
         const file = fileInput.files[0];
-        setFile(file);
-        player.src = URL.createObjectURL(file);
-        player.hidden = false;
+        setFile(file, URL.createObjectURL(file));
       }
     });
 
-    function setFile(file) {
+    function setFile(file, url) {
       selectedFile = file;
+      selectedFileUrl = url;
       filenameEl.textContent = file.name;
       submitBtn.disabled = false;
-      resultsEl.style.display = "none";
       errorEl.style.display = "none";
+      player.src = url;
+      player.hidden = false;
     }
 
     submitBtn.addEventListener("click", () => {
-      if (selectedFile) runPrediction(selectedFile);
+      if (selectedFile) runGuess(selectedFile);
     });
 
-    async function runPrediction(file) {
-      submitBtn.disabled = true;
-      statusEl.style.display = "block";
-      errorEl.style.display = "none";
-      resultsEl.style.display = "none";
+    againBtn.addEventListener("click", () => {
+      stageReveal.hidden = true;
+      stageIdle.hidden = false;
+    });
+
+    function buildReel(landingGenre) {
+      reelTrack.innerHTML = "";
+      const rows = [];
+      for (let i = 0; i < REEL_CYCLES; i++) {
+        rows.push(...GENRE_ORDER);
+      }
+      rows.push(landingGenre);
+
+      for (let i = 0; i < rows.length; i++) {
+        const genre = rows[i];
+        const meta = GENRE_META[genre] || { emoji: "🎵" };
+        const row = document.createElement("div");
+        if (i === rows.length - 1) row.classList.add("landing");
+        row.textContent = `${meta.emoji} ${genre}`;
+        reelTrack.appendChild(row);
+      }
+
+      const landingIndex = rows.length - 1;
+      const targetY = -(landingIndex * REEL_ROW_HEIGHT) + REEL_ROW_HEIGHT;
+
+      reelTrack.style.transition = "none";
+      reelTrack.style.transform = "translateY(0)";
+      // Force reflow so the transition below actually animates from translateY(0).
+      void reelTrack.offsetHeight;
+      reelTrack.style.transition = `transform ${MIN_LOADING_MS}ms cubic-bezier(0.2, 0.7, 0.15, 1)`;
+      reelTrack.style.transform = `translateY(${targetY}px)`;
+    }
+
+    function renderPodium(predictions) {
+      const top3 = predictions.slice(0, 3);
+      const [first, second, third] = top3;
+      const order = [
+        { data: second, rank: 2 },
+        { data: first, rank: 1 },
+        { data: third, rank: 3 },
+      ];
+
+      podiumEl.innerHTML = "";
+      for (const { data, rank } of order) {
+        if (!data) continue;
+        const meta = GENRE_META[data.genre] || { emoji: "🎵" };
+        const pct = (data.probability * 100).toFixed(1);
+        const col = document.createElement("div");
+        col.className = `podium-col rank-${rank}`;
+        col.innerHTML = `
+          <span class="p-emoji">${meta.emoji}</span>
+          <span class="p-genre">${data.genre}</span>
+          <span class="p-pct">${pct}%</span>
+          <div class="podium-block"></div>
+        `;
+        podiumEl.appendChild(col);
+      }
+    }
+
+    async function runGuess(file) {
+      stageIdle.hidden = true;
+      stageReveal.hidden = true;
+      stageLoading.hidden = false;
+
+      loadingSpectro.style.animation = "none";
+      void loadingSpectro.offsetWidth;
+      loadingSpectro.style.animation = "";
 
       const formData = new FormData();
       formData.append("file", file);
 
+      let data;
       try {
         const response = await fetch("/predict", { method: "POST", body: formData });
-        const data = await response.json();
-
+        data = await response.json();
         if (!response.ok) {
           throw new Error(data.detail || "Prediction failed.");
         }
-
-        renderResults(data.predictions, data.spectrogram_png);
       } catch (err) {
+        stageLoading.hidden = true;
+        stageIdle.hidden = false;
         errorEl.textContent = err.message;
         errorEl.style.display = "block";
-      } finally {
-        statusEl.style.display = "none";
-        submitBtn.disabled = false;
-      }
-    }
-
-    function renderResults(predictions, spectrogramPngDataUri) {
-      const top3 = predictions.slice(0, 3);
-      const [first, ...rest] = top3;
-      const firstMeta = GENRE_META[first.genre] || { emoji: "🎵" };
-
-      heroEl.innerHTML = `
-        <span class="hero-emoji">${firstMeta.emoji}</span>
-        <div class="hero-genre">${first.genre}</div>
-        <div class="hero-pct">${(first.probability * 100).toFixed(1)}%</div>
-      `;
-
-      runnerUpsEl.innerHTML = "";
-      for (const { genre, probability } of rest) {
-        const pct = (probability * 100).toFixed(1);
-        const row = document.createElement("div");
-        row.className = "bar-row";
-        row.innerHTML = `
-          <div class="bar-label">${genre}</div>
-          <div class="bar-track"><div class="bar-fill" style="width: ${pct}%"></div></div>
-          <div class="bar-pct">${pct}%</div>
-        `;
-        runnerUpsEl.appendChild(row);
+        return;
       }
 
-      spectrogramEl.src = spectrogramPngDataUri;
-      resultsEl.style.display = "block";
+      // The reel's CSS transition (set up in buildReel) runs for MIN_LOADING_MS
+      // starting now, so the reveal must wait exactly that long too, or it
+      // would cut the animation off mid-spin.
+      const topGenre = data.predictions[0].genre;
+      buildReel(topGenre);
+      await sleep(MIN_LOADING_MS);
+
+      renderPodium(data.predictions);
+      spectrogramEl.src = data.spectrogram_png;
+      player2.src = selectedFileUrl;
+
+      stageLoading.hidden = true;
+      stageReveal.hidden = false;
     }
   </script>
 </body>

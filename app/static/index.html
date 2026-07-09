@@ -88,16 +88,20 @@
     color: var(--text-muted);
     text-transform: uppercase;
     letter-spacing: 0.06em;
-    margin-bottom: 0.5rem;
+    margin-bottom: 0.6rem;
+    text-align: center;
   }
-  .chip-row { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.8rem; }
+  .chip-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.5rem; margin-bottom: 0.9rem; }
   .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
     font-family: var(--mono);
-    font-size: 0.72rem;
-    padding: 0.35rem 0.7rem;
+    font-size: 0.75rem;
+    padding: 0.45rem 0.8rem 0.45rem 0.6rem;
     border-radius: 999px;
     background: rgba(255, 255, 255, 0.06);
-    border: 1px solid rgba(255, 255, 255, 0.14);
+    border: 1px dashed rgba(255, 255, 255, 0.22);
     color: var(--text-secondary);
     cursor: grab;
     transition: background 0.15s, border-color 0.15s;
@@ -128,6 +132,19 @@
   .dz.dragover { border-color: var(--accent-purple-hover); background: rgba(168, 85, 247, 0.12); }
   .dz input { display: none; }
   #filename { margin-top: 0.5rem; font-size: 0.8rem; color: var(--text-secondary); }
+  .browse-link {
+    display: inline-block;
+    margin-top: 0.5rem;
+    background: none;
+    border: none;
+    padding: 0;
+    font-family: inherit;
+    font-size: 0.78rem;
+    color: var(--accent-purple-hover);
+    text-decoration: underline;
+    cursor: pointer;
+  }
+  .browse-link:hover { color: var(--accent-cyan); }
 
   .btn {
     display: block;
@@ -254,6 +271,21 @@
   .podium-col.rank-2 .podium-block { height: 54px; }
   .podium-col.rank-3 .podium-block { height: 40px; }
 
+  /* Reveal micro-interaction: the winner pops in immediately, the
+     runner-ups rise into place a beat after. */
+  @keyframes heroPop {
+    0% { opacity: 0; transform: scale(0.7); }
+    60% { opacity: 1; transform: scale(1.08); }
+    100% { opacity: 1; transform: scale(1); }
+  }
+  @keyframes riseIn {
+    from { opacity: 0; transform: translateY(14px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .podium-col.rank-1 { animation: heroPop 0.5s cubic-bezier(0.2, 0.7, 0.3, 1.4) both; }
+  .podium-col.rank-2 { animation: riseIn 0.4s ease-out 0.18s both; }
+  .podium-col.rank-3 { animation: riseIn 0.4s ease-out 0.3s both; }
+
   .reveal-spectro-block { width: 100%; max-width: 320px; margin-bottom: 1rem; }
   .spectro-label {
     font-family: var(--mono);
@@ -285,6 +317,8 @@
 
         <div class="dz" id="dropzone">
           <div>Drag a track here, or drag a sample above</div>
+          <button class="browse-link" id="browseBtn" type="button">or choose a file</button>
+          <input type="file" id="fileInput" accept=".wav,.mp3,.flac,.ogg,.m4a" hidden />
           <div id="filename">No file selected</div>
         </div>
 
@@ -361,6 +395,8 @@
     const stageReveal = document.getElementById("stageReveal");
 
     const dropzone = document.getElementById("dropzone");
+    const browseBtn = document.getElementById("browseBtn");
+    const fileInput = document.getElementById("fileInput");
     const filenameEl = document.getElementById("filename");
     const submitBtn = document.getElementById("submitBtn");
     const player = document.getElementById("player");
@@ -448,6 +484,16 @@
       }
     });
 
+    // Explicit "or choose a file" link — works on desktop and, critically,
+    // on touch devices where there's no drag gesture for files at all.
+    browseBtn.addEventListener("click", () => fileInput.click());
+    fileInput.addEventListener("change", () => {
+      if (fileInput.files.length) {
+        const file = fileInput.files[0];
+        setFile(file, URL.createObjectURL(file));
+      }
+    });
+
     function setFile(file, url) {
       selectedFile = file;
       selectedFileUrl = url;
@@ -470,6 +516,7 @@
       submitBtn.disabled = true;
       player.hidden = true;
       player.removeAttribute("src");
+      fileInput.value = "";
 
       stageReveal.hidden = true;
       stageIdle.hidden = false;

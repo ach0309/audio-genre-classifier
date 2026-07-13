@@ -2,7 +2,7 @@
 
 An end-to-end machine learning project that classifies music into 10 genres from raw audio. Built by **team4ward** using the [GTZAN dataset](https://www.kaggle.com/datasets/andradaolteanu/gtzan-dataset-music-genre-classification), PostgreSQL, librosa, PyTorch, and scikit-learn.
 
-The core pipeline is complete: the project explores and validates the dataset, creates reproducible train/validation/test splits, transforms waveforms into log-mel spectrograms, trains a convolutional neural network, and evaluates the best checkpoint on a held-out test set. A user-facing demo is now in development.
+The core pipeline is complete: the project explores and validates the dataset, creates reproducible train/validation/test splits, transforms waveforms into log-mel spectrograms, trains a convolutional neural network, and evaluates the best checkpoint on a held-out test set. A local, user-facing demo (`app/`) puts that pipeline in front of a real person — upload a track and see the model's guess — and is still being iterated on.
 
 ## Project overview
 
@@ -82,6 +82,13 @@ The final notebook loads the saved checkpoint and evaluates it only on the held-
 
 ```text
 audio-genre-classifier/
+├── app/
+│   ├── main.py                # FastAPI backend (POST /predict, serves the frontend)
+│   ├── inference.py           # Loads models/best_model.pth, runs code/common.py's pipeline
+│   ├── README.md              # Demo app architecture, how it connects to the notebooks
+│   └── static/
+│       ├── index.html         # Single-page frontend (upload, samples, results, spectrogram)
+│       └── samples/           # Bundled demo clips, one per genre
 ├── code/
 │   ├── 1_explore.ipynb       # Dataset exploration and integrity checks
 │   ├── 2_transform.ipynb     # Preprocessing, augmentation, and DataLoaders
@@ -103,8 +110,10 @@ audio-genre-classifier/
 │   ├── requirements.txt      # Python dependencies
 │   ├── *research.md          # Dataset and audio-feature research
 │   └── images/               # EDA, training, evaluation, and ERD figures
-└── models/
-    └── best_model.pth        # Generated locally by 3_model.ipynb; not committed
+├── models/
+│   └── best_model.pth        # Generated locally by 3_model.ipynb; not committed
+└── scripts/
+    └── generate_sample_clips.py  # One-time tool that built app/static/samples/
 ```
 
 ## Dataset
@@ -176,9 +185,25 @@ Run the notebooks in numerical order. Restart the Jupyter kernel before running 
 
 `common.py` must remain beside the notebooks because the final three notebooks import it directly.
 
+### 5. Run the demo app
+
+Requires `models/best_model.pth` to already exist (step 4 above).
+
+```bash
+uvicorn app.main:app --reload
+```
+
+Open http://localhost:8000, drag a track onto the box (or drag/click one of the bundled samples, or use the "choose a file" link), and watch it guess.
+
+## Demo app
+
+**Genre Guesser** — a small local web app that puts the trained model in front of a real person: drag a track onto the box (or drop in one of five bundled sample clips), and watch a game-show-style reveal — the clip's mel spectrogram fades in while genre names roll past in a slot reel, landing on the model's actual top prediction, then the top 3 land as a podium with the winner physically elevated above the #2/#3 runner-ups. The analyzed spectrogram and an autoplaying audio player round out the reveal. See [app/README.md](app/README.md) for how it connects to the rest of the pipeline — the same `models/best_model.pth` checkpoint and `code/common.py` preprocessing/architecture that `3_model.ipynb` and `4_predict.ipynb` use, just run against arbitrary uploaded audio instead of the fixed GTZAN test split.
+
+Upload works by drag-and-drop (including dragging the sample chips themselves) or via an explicit "choose a file" link — the latter is what makes this work on mobile, since there's no drag gesture for files on a touchscreen.
+
 ## Project status and next steps
 
-The research, data pipeline, model training, and evaluation phases are complete. The team is currently building the demo that will expose the inference workflow through a simpler user experience.
+The research, data pipeline, model training, and evaluation phases are complete. The demo (`app/`) is built and working end to end, including the game-show reveal flow and mobile-friendly upload.
 
 With more time, the strongest technical next steps would be:
 

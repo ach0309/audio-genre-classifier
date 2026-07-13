@@ -1,8 +1,22 @@
-# Demo app architecture
+# Demo app architecture — Genre Guesser
 
 A local web app that lets someone upload (or try a sample) audio clip and get the
 trained model's genre prediction interactively — the Sprint deliverable of putting
 the model in front of a real person.
+
+The frontend is a three-stage reveal rather than a static form-and-results page:
+
+1. **Idle** — drag a track onto the box (or drag one of the 5 sample chips onto it,
+   or use the "choose a file" fallback link — drag has no equivalent gesture on
+   touchscreens, so the fallback is what makes this work on mobile). Clicking a
+   sample chip instead of dragging it loads *and* guesses immediately, for the
+   fastest path through a live demo.
+2. **Guessing** — the analyzed clip's mel spectrogram fades in while genre names
+   roll past in a slot-reel window, landing on the model's actual top prediction
+   (not a canned animation) after a fixed ~2.6s.
+3. **Reveal** — the top pick pops in as a "podium" hero, physically elevated above
+   the #2/#3 runner-ups which rise in a beat after, alongside the real spectrogram
+   and an audio player that autoplays the clip.
 
 ## How it connects to the rest of the pipeline
 
@@ -52,9 +66,13 @@ if the checkpoint is missing.
      what the model classified, not a separately-computed visualization)
 4. `app/main.py` returns JSON: all 10 genre probabilities (sorted, most likely first)
    plus the spectrogram as a base64 PNG data URI.
-5. `app/static/index.html` takes the top 3 predictions and renders the #1 pick as a
-   large "hero" result with the #2/#3 as smaller bars underneath, plus the
-   spectrogram image and an audio player for the analyzed clip.
+5. `app/static/index.html` builds the slot-reel dynamically from that response —
+   two cycles of all 10 genres plus the real top prediction as the landing row —
+   and holds the reveal back until the reel's CSS transition has fully played, so
+   the animation is never cut short regardless of how fast inference returns.
+6. The reveal renders the top 3 as a podium (the #1 pick physically elevated above
+   #2/#3), sets the spectrogram `<img>` to the returned PNG, and autoplays the
+   analyzed clip through a second audio player.
 
 ## Files
 

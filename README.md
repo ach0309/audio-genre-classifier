@@ -193,17 +193,17 @@ Requires `models/best_model.pth` to already exist (step 4 above).
 uvicorn app.main:app --reload
 ```
 
-Open http://localhost:8000, upload a track (or click one of the bundled samples), and see the model's guess.
+Open http://localhost:8000, drag a track onto the box (or drag/click one of the bundled samples, or use the "choose a file" link), and watch it guess.
 
 ## Demo app
 
-A small local web app that puts the trained model in front of a real person: upload a track, or click one of five bundled sample clips, and see the model's top-3 genre guesses alongside the mel spectrogram it actually classified. See [app/README.md](app/README.md) for how it connects to the rest of the pipeline — the same `models/best_model.pth` checkpoint and `code/common.py` preprocessing/architecture that `3_model.ipynb` and `4_predict.ipynb` use, just run against arbitrary uploaded audio instead of the fixed GTZAN test split.
+**Genre Guesser** — a small local web app that puts the trained model in front of a real person: drag a track onto the box (or drop in one of five bundled sample clips), and watch a game-show-style reveal — the clip's mel spectrogram fades in while genre names roll past in a slot reel, landing on the model's actual top prediction, then the top 3 land as a podium with the winner physically elevated above the #2/#3 runner-ups. The analyzed spectrogram and an autoplaying audio player round out the reveal. See [app/README.md](app/README.md) for how it connects to the rest of the pipeline — the same `models/best_model.pth` checkpoint and `code/common.py` preprocessing/architecture that `3_model.ipynb` and `4_predict.ipynb` use, just run against arbitrary uploaded audio instead of the fixed GTZAN test split.
 
-The UI is still being iterated on — current direction is a game-show-style reveal (spectrogram appears, genre options roll past like a slot reel, then the top 3 land with the top pick visually elevated above the runner-ups) rather than a static results list, since a live demo benefits from a moment of suspense over an instant flat readout.
+Upload works by drag-and-drop (including dragging the sample chips themselves) or via an explicit "choose a file" link — the latter is what makes this work on mobile, since there's no drag gesture for files on a touchscreen.
 
 ## Project status and next steps
 
-The research, data pipeline, model training, and evaluation phases are complete. A first working version of the demo exists (`app/`); the team is now iterating on its interaction design.
+The research, data pipeline, model training, and evaluation phases are complete. The demo (`app/`) is built and working end to end, including the game-show reveal flow and mobile-friendly upload.
 
 With more time, the strongest technical next steps would be:
 
